@@ -29,8 +29,7 @@
     {
       "binding": "DB",
       "database_name": "splitr",
-      // Filled in when the database is created on Cloudflare
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "8dca0d2b-ce1b-4a48-99b8-c037737cd0d9",
       "migrations_dir": "prisma/migrations"
     }
   ],
