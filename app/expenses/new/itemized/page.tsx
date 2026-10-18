@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { txLabel, type TxView } from "@/lib/transactions";
 import { loadSourceTx } from "@/lib/source-tx";
@@ -17,7 +17,6 @@ import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitItemized } from "@/lib/split";
-import type { ParsedReceipt } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,21 +43,6 @@ function makeRow(assigneeIds: string[] = []): ItemRow {
     quantity: "1",
     unitPrice: "0.00",
     lineTotal: "0.00",
-    assigneeIds,
-  };
-}
-
-function parsedItemToRow(
-  it: ParsedReceipt["items"][number],
-  assigneeIds: string[]
-): ItemRow {
-  return {
-    id: crypto.randomUUID(),
-    rawName: it.rawName,
-    name: it.name,
-    quantity: String(it.quantity),
-    unitPrice: it.unitPrice.toFixed(2),
-    lineTotal: it.lineTotal.toFixed(2),
     assigneeIds,
   };
 }
@@ -120,15 +104,6 @@ export default function NewItemizedPage({
   const [people, setPeople] = useState<Person[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(true);
 
-  // Flow
-  const [step, setStep] = useState<"photo" | "table">("photo");
-
-  // Parse state
-  const [parsing, setParsing] = useState(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [parseWarnings, setParseWarnings] = useState<string[]>([]);
-  const [parsedTotal, setParsedTotal] = useState<number | null>(null);
-
   // Table data
   const [store, setStore] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -143,9 +118,6 @@ export default function NewItemizedPage({
   // Save
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // File input ref (hidden, triggered by button)
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---------------------------------------------------------------------------
   // Load people
@@ -176,7 +148,6 @@ export default function NewItemizedPage({
           setTaxDollars((saved.taxCents / 100).toFixed(2));
           setRows(saved.items.map(savedItemToRow));
           setPayerId(saved.payerId);
-          setStep("table");
           return;
         }
         if (tx) {
@@ -187,6 +158,8 @@ export default function NewItemizedPage({
         // A charge from Money is yours, so you paid
         const def = (tx && data.find((p) => p.isMe)) || data.find((p) => p.isDefault) || data[0];
         if (def) setPayerId(def.id);
+        // Start with one empty item, shared by the usual people
+        setRows([makeRow(data.filter((p) => p.isDefault || (tx && p.isMe)).map((p) => p.id))]);
       })
       .catch((err) => {
         if (editId || fromTx) {
@@ -201,70 +174,6 @@ export default function NewItemizedPage({
   const defaultAssigneeIds = people
     .filter((p) => p.isDefault || (sourceTx && p.isMe))
     .map((p) => p.id);
-
-  // ---------------------------------------------------------------------------
-  // Photo step
-  // ---------------------------------------------------------------------------
-
-  function enterManually() {
-    const ids = defaultAssigneeIds;
-    setRows([makeRow(ids)]);
-    setParseError(null);
-    setStep("table");
-  }
-
-  async function handleFileChange(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setParsing(true);
-    setParseError(null);
-
-    const fd = new FormData();
-    fd.append("image", file);
-
-    try {
-      const res = await fetch("/api/expenses/parse-receipt", {
-        method: "POST",
-        body: fd,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          (body as { error?: string }).error ??
-            `Parse failed (HTTP ${res.status})`
-        );
-      }
-
-      const parsed: ParsedReceipt = await res.json();
-      const ids = defaultAssigneeIds;
-
-      setRows(parsed.items.map((it) => parsedItemToRow(it, ids)));
-      setStore(parsed.store ?? "");
-      setPurchasedAt(
-        parsed.purchasedAt ? parsed.purchasedAt.slice(0, 10) : ""
-      );
-      setTaxDollars(parsed.tax.toFixed(2));
-      setParsedTotal(parsed.total);
-      setParseWarnings(parsed.warnings ?? []);
-      setStep("table");
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Receipt parse failed";
-      setParseError(msg);
-      // Fall back to an empty editable table so manual entry is always available
-      const ids = defaultAssigneeIds;
-      setRows([makeRow(ids)]);
-      setStep("table");
-    } finally {
-      setParsing(false);
-      // Reset input so the same file can be re-selected if needed
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Table handlers
@@ -504,186 +413,123 @@ export default function NewItemizedPage({
         )}
       </header>
 
-      {/* ── PHOTO STEP ──────────────────────────────────────────────────── */}
-      {step === "photo" && (
-        <div className="rounded-3xl border border-ink bg-lavender px-6 py-12 text-center">
-          <p className="font-display text-5xl uppercase">Snap a receipt</p>
-          <p className="mt-3 text-sm max-w-sm mx-auto">
-            Take a photo or pick an image. Items, tax, and the store fill in
-            automatically, and you can fix anything after.
-          </p>
-          <div className="mt-7 flex flex-col items-center gap-3">
-            <Button
-              variant="primary"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={parsing}
-            >
-              {parsing ? "Reading receipt…" : "Choose photo"}
-            </Button>
-
-            {/* Hidden file input — capture="environment" opens camera on mobile */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="sr-only"
-              aria-label="Upload receipt image"
-            />
-
-            <button
-              type="button"
-              onClick={enterManually}
-              disabled={parsing}
-              className="text-sm font-semibold underline underline-offset-4 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              Type items instead
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── TABLE STEP ──────────────────────────────────────────────────── */}
-      {step === "table" && (
-        <>
-          {/* Parse problems are non-blocking: the table is still editable */}
-          {parseError && (
-            <p
-              className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
-              role="alert"
-            >
-              Couldn&apos;t read that receipt ({parseError}). Enter the items below instead.
-            </p>
-          )}
-          {parseWarnings.length > 0 && (
-            <ul className="rounded-3xl bg-sun px-5 py-3 space-y-1 text-sm" role="status">
-              {parseWarnings.map((w) => (
-                <li key={w}>Check: {w}</li>
-              ))}
-            </ul>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-4">
-            <Field label="Store" htmlFor="store-input">
-              <Input
-                id="store-input"
-                value={store}
-                onChange={(e) => setStore(e.target.value)}
-                placeholder="Walmart, Costco…"
-              />
-            </Field>
-            <Field label="Date" htmlFor="date-input">
-              <Input
-                id="date-input"
-                type="date"
-                value={purchasedAt}
-                onChange={(e) => setPurchasedAt(e.target.value)}
-              />
-            </Field>
-          </div>
-
-          <Section title="Who paid">
-            {peopleLoading ? (
-              <p className="text-sm text-ink-faint">Loading…</p>
-            ) : (
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
-                {people.map((p) => (
-                  <PersonChip
-                    key={p.id}
-                    name={p.name}
-                    colorHex={p.colorHex}
-                    selected={payerId === p.id}
-                    onClick={() => setPayerId(p.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title={`Items · ${rows.length}`} hint="Tap people under each item to say who shares it.">
-            {selectedRowIds.size > 0 && (
-              <BulkAssignBar
-                selectedRowIds={selectedRowIds}
-                rows={rows}
-                people={people}
-                onBulkToggle={handleBulkToggle}
-                onClearSelection={() => setSelectedRowIds(new Set())}
-              />
-            )}
-            <ItemTable
-              rows={rows}
-              people={people}
-              selectedRowIds={selectedRowIds}
-              parsedTotal={parsedTotal}
-              taxDollars={taxDollars}
-              onTaxChange={setTaxDollars}
-              onRowChange={handleRowChange}
-              onDeleteRow={handleDeleteRow}
-              onAddRow={handleAddRow}
-              onToggleAssignee={handleToggleAssignee}
-              onToggleRowSelect={handleToggleRowSelect}
-              onToggleSelectAll={handleToggleSelectAll}
-            />
-          </Section>
-
-          <BreakdownCard
-            items={rows.map((r) => ({
-              id: r.id,
-              lineTotal: r.lineTotal,
-              assigneeIds: r.assigneeIds,
-            }))}
-            taxDollars={taxDollars}
-            people={people}
-            payerId={payerId}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-4">
+        <Field label="Store" htmlFor="store-input">
+          <Input
+            id="store-input"
+            value={store}
+            onChange={(e) => setStore(e.target.value)}
+            placeholder="Walmart, Costco…"
           />
+        </Field>
+        <Field label="Date" htmlFor="date-input">
+          <Input
+            id="date-input"
+            type="date"
+            value={purchasedAt}
+            onChange={(e) => setPurchasedAt(e.target.value)}
+          />
+        </Field>
+      </div>
 
-          <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
-            <TagPicker value={tags} onChange={setTags} />
-          </Section>
+      <Section title="Who paid">
+        {peopleLoading ? (
+          <p className="text-sm text-ink-faint">Loading…</p>
+        ) : (
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
+            {people.map((p) => (
+              <PersonChip
+                key={p.id}
+                name={p.name}
+                colorHex={p.colorHex}
+                selected={payerId === p.id}
+                onClick={() => setPayerId(p.id)}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
 
-          {saveError && (
-            <p
-              className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
-              role="alert"
-            >
-              {saveError}
-            </p>
-          )}
+      <Section title={`Items · ${rows.length}`} hint="Tap people under each item to say who shares it.">
+        {selectedRowIds.size > 0 && (
+          <BulkAssignBar
+            selectedRowIds={selectedRowIds}
+            rows={rows}
+            people={people}
+            onBulkToggle={handleBulkToggle}
+            onClearSelection={() => setSelectedRowIds(new Set())}
+          />
+        )}
+        <ItemTable
+          rows={rows}
+          people={people}
+          selectedRowIds={selectedRowIds}
+          taxDollars={taxDollars}
+          onTaxChange={setTaxDollars}
+          onRowChange={handleRowChange}
+          onDeleteRow={handleDeleteRow}
+          onAddRow={handleAddRow}
+          onToggleAssignee={handleToggleAssignee}
+          onToggleRowSelect={handleToggleRowSelect}
+          onToggleSelectAll={handleToggleSelectAll}
+        />
+      </Section>
 
-          <SaveBar
-            summary={
-              <>
-                <span className="font-semibold tabular-nums">{formatUSD(itemsTotalCents)}</span>
-                {sourceTx ? (
-                  <span
-                    className={
-                      itemsTotalCents === sourceTx.amount ? "text-ink-muted" : "text-danger font-semibold"
-                    }
-                  >
-                    {itemsTotalCents === sourceTx.amount
-                      ? " · matches the charge"
-                      : ` of ${formatUSD(sourceTx.amount)} charge`}
-                  </span>
-                ) : (
-                  <span className="text-ink-muted">
-                    {" "}· {rows.length} item{rows.length === 1 ? "" : "s"}
-                  </span>
-                )}
-              </>
-            }
-            saveLabel={editId ? "Save changes" : "Save"}
-            canSave={canSave}
-            saving={saving}
-            onSave={handleSave}
-            cancelHref={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}
-          >
-            <span className="hidden sm:inline-flex">
-              <CopyButton summary={copySummary} disabled={!copySummary} />
-            </span>
-          </SaveBar>
-        </>
+      <BreakdownCard
+        items={rows.map((r) => ({
+          id: r.id,
+          lineTotal: r.lineTotal,
+          assigneeIds: r.assigneeIds,
+        }))}
+        taxDollars={taxDollars}
+        people={people}
+        payerId={payerId}
+      />
+
+      <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
+        <TagPicker value={tags} onChange={setTags} />
+      </Section>
+
+      {saveError && (
+        <p
+          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
+          role="alert"
+        >
+          {saveError}
+        </p>
       )}
+
+      <SaveBar
+        summary={
+          <>
+            <span className="font-semibold tabular-nums">{formatUSD(itemsTotalCents)}</span>
+            {sourceTx ? (
+              <span
+                className={
+                  itemsTotalCents === sourceTx.amount ? "text-ink-muted" : "text-danger font-semibold"
+                }
+              >
+                {itemsTotalCents === sourceTx.amount
+                  ? " · matches the charge"
+                  : ` of ${formatUSD(sourceTx.amount)} charge`}
+              </span>
+            ) : (
+              <span className="text-ink-muted">
+                {" "}· {rows.length} item{rows.length === 1 ? "" : "s"}
+              </span>
+            )}
+          </>
+        }
+        saveLabel={editId ? "Save changes" : "Save"}
+        canSave={canSave}
+        saving={saving}
+        onSave={handleSave}
+        cancelHref={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}
+      >
+        <span className="hidden sm:inline-flex">
+          <CopyButton summary={copySummary} disabled={!copySummary} />
+        </span>
+      </SaveBar>
     </div>
   );
 }

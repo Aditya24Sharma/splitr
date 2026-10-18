@@ -32,11 +32,6 @@ interface ItemTableProps {
   rows: ItemRow[];
   people: Person[];
   selectedRowIds: Set<string>;
-  /**
-   * Parsed receipt total in dollars — used to surface a reconciliation
-   * warning when items+tax don't add up. Omit if not from a parsed receipt.
-   */
-  parsedTotal?: number | null;
   /** Tax in dollars as a string */
   taxDollars: string;
   onTaxChange: (v: string) => void;
@@ -62,7 +57,6 @@ export function ItemTable({
   rows,
   people,
   selectedRowIds,
-  parsedTotal,
   taxDollars,
   onTaxChange,
   onRowChange,
@@ -81,10 +75,6 @@ export function ItemTable({
 
   const allSelected =
     rows.length > 0 && rows.every((r) => selectedRowIds.has(r.id));
-
-  const showReconcileWarning =
-    parsedTotal != null &&
-    Math.abs(computedTotal - parsedTotal) > 0.005;
 
   // Shared input classes for inline compact inputs
   const cellInput =
@@ -271,13 +261,6 @@ export function ItemTable({
           </span>
         </div>
 
-        {showReconcileWarning && (
-          <p className="text-sm bg-sun rounded-2xl px-3 py-2">
-            Note: computed total ({formatUSD(toCents(computedTotal))}) differs
-            from parsed receipt total ({formatUSD(toCents(parsedTotal!))}).
-            Adjust items or tax to reconcile.
-          </p>
-        )}
       </div>
     </div>
   );

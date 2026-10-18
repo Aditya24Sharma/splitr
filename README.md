@@ -26,19 +26,7 @@ npm run db:push
 
 Creates `prisma/dev.db` (SQLite). `DATABASE_URL` defaults to `file:./prisma/dev.db` — no `.env` is needed for the database unless you want to override the path.
 
-### 3. Gemini API key (optional — for photo scan)
-
-To use the **snap/upload receipt** feature, get a free key from [Google AI Studio](https://aistudio.google.com/app/apikey), then:
-
-```bash
-cp .env.example .env
-# edit .env and paste your key:
-# GEMINI_API_KEY=your_key_here
-```
-
-Without a key, the photo-scan button returns an error, but **manual item entry and all splitting math work fine** — no key required for that path.
-
-### 4. Run
+### 3. Run
 
 ```bash
 npm run dev
@@ -55,7 +43,7 @@ Add your roommates and regular friends. Check "default" for roommates so they're
 
 **Step 2 — Create an expense**
 
-- **Itemized** (`/expenses/new/itemized`): snap or upload a store receipt → Gemini parses items automatically (or enter them by hand) → assign who shares each item → bulk-assign the common ones → pick who paid.  
+- **Itemized** (`/expenses/new/itemized`): type in the receipt items → assign who shares each item → bulk-assign the common ones → pick who paid.  
 - **Simple** (`/expenses/new/simple`): type a total and description → split evenly or enter exact per-person amounts.
 
 **Step 3 — Copy and paste into Splitwise**  
@@ -83,4 +71,4 @@ Runs the Vitest unit suite (split engine, money utilities, validation, breakdown
 
 ## Tech stack
 
-Next.js 16 · TypeScript · Tailwind CSS v4 · Prisma 7 + SQLite (better-sqlite3 driver adapter) · Google Gemini Vision API · Vitest
+Next.js 16 · TypeScript · Tailwind CSS v4 · Prisma 7 + SQLite (better-sqlite3 driver adapter) · Vitest
