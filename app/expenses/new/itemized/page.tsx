@@ -10,7 +10,7 @@ import { ItemTable, type ItemRow } from "@/components/ItemTable";
 import { BulkAssignBar } from "@/components/BulkAssignBar";
 import { BreakdownCard } from "@/components/BreakdownCard";
 import { CopyButton } from "@/components/CopyButton";
-import { TagInput } from "@/components/TagInput";
+import { TagPicker } from "@/components/TagPicker";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitItemized } from "@/lib/split";
 import type { ParsedReceipt } from "@/lib/types";
@@ -588,8 +588,8 @@ export default function NewItemizedPage({
                 />
               </Field>
               <div className="sm:col-span-2">
-                <Field label="Tags" hint="Press Enter to add. Use tags to filter expenses later.">
-                  <TagInput value={tags} onChange={setTags} />
+                <Field label="Tags" hint="Click to add or remove. Manage the list on the Tags page.">
+                  <TagPicker value={tags} onChange={setTags} />
                 </Field>
               </div>
             </div>

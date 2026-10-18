@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/CopyButton";
 import { PersonChip } from "@/components/PersonChip";
-import { TagInput } from "@/components/TagInput";
+import { TagPicker } from "@/components/TagPicker";
 import { formatUSD } from "@/lib/money";
 
 // ---------------------------------------------------------------------------
@@ -322,7 +322,7 @@ export default function ExpenseDetailPage({
 
         <div className="mt-4 border-t border-rim pt-4 space-y-1.5">
           <p className="text-sm text-ink-muted">Tags</p>
-          <TagInput value={tags} onChange={handleTagsChange} />
+          <TagPicker value={tags} onChange={handleTagsChange} />
           {tagsError && (
             <p className="text-xs text-danger" role="alert">
               {tagsError}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
-import { connectTags } from '@/lib/tags'
+import { connectTags, unknownTags } from '@/lib/tags'
 import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
 
 // ---------------------------------------------------------------------------
@@ -20,10 +20,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
   const { input } = parsed
+  const missing = await unknownTags(prisma, input.tags)
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `unknown tag: ${missing.join(', ')}` }, { status: 400 })
+  }
 
   const expense = await prisma.$transaction(async (tx) => {
     const exp = await tx.expense.create({
-      data: { ...expenseFields(input), tags: { connectOrCreate: connectTags(input.tags) } },
+      data: { ...expenseFields(input), tags: { connect: connectTags(input.tags) } },
     })
     await createExpenseChildren(tx, exp.id, input)
     return tx.expense.findUniqueOrThrow({

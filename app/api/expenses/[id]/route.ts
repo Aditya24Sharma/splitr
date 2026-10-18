@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
-import { parseTags, connectTags } from '@/lib/tags'
+import { parseTags, connectTags, unknownTags } from '@/lib/tags'
 import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
 
 // ---------------------------------------------------------------------------
@@ -76,14 +76,18 @@ export async function PATCH(
   if (loggedToSplitwise === undefined && tags === undefined) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
   }
+  const missing = tags ? await unknownTags(prisma, tags) : []
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `unknown tag: ${missing.join(', ')}` }, { status: 400 })
+  }
 
   try {
     const expense = await prisma.expense.update({
       where: { id },
       data: {
         ...(loggedToSplitwise !== undefined && { loggedToSplitwise }),
-        // set: [] unlinks the old tags, then the new list is linked (created if missing)
-        ...(tags !== undefined && { tags: { set: [], connectOrCreate: connectTags(tags) } }),
+        // set replaces the expense's tags with exactly this list
+        ...(tags !== undefined && { tags: { set: connectTags(tags) } }),
       },
       include: {
         items: { include: { assignments: true }, orderBy: { sortOrder: 'asc' } },
@@ -124,6 +128,10 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
   const { input } = parsed
+  const missing = await unknownTags(prisma, input.tags)
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `unknown tag: ${missing.join(', ')}` }, { status: 400 })
+  }
 
   const existing = await prisma.expense.findUnique({ where: { id }, select: { type: true } })
   if (!existing) {
@@ -141,7 +149,7 @@ export async function PUT(
       data: {
         ...expenseFields(input),
         loggedToSplitwise: false,
-        tags: { set: [], connectOrCreate: connectTags(input.tags) },
+        tags: { set: connectTags(input.tags) },
       },
     })
     await createExpenseChildren(tx, id, input)

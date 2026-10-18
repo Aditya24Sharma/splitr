@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
-import { TagInput } from "@/components/TagInput";
+import { TagPicker } from "@/components/TagPicker";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
 
@@ -361,8 +361,8 @@ export default function NewSimplePage({
             />
           </Field>
 
-          <Field label="Tags" hint="Press Enter to add. Use tags to filter expenses later.">
-            <TagInput value={tags} onChange={setTags} />
+          <Field label="Tags" hint="Click to add or remove. Manage the list on the Tags page.">
+            <TagPicker value={tags} onChange={setTags} />
           </Field>
 
           <Field label="Total amount ($)" htmlFor="amount-input">
