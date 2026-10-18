@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Field";
 import { formatUSD } from "@/lib/money";
 import { settleExpenses } from "@/lib/settle";
+import { filterExpenses } from "@/lib/expense-filter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +31,8 @@ interface ExpenseListItem {
   payer: Person;
   loggedToSplitwise: boolean;
   createdAt: string;
+  tags: string[];
+  itemNames: string[];
   breakdown: {
     perPerson: { personId: string; cents: number }[];
   };
@@ -60,15 +64,26 @@ export default function HomePage() {
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [itemQuery, setItemQuery] = useState("");
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
     [people]
   );
 
+  const allTags = useMemo(
+    () => [...new Set(expenses.flatMap((e) => e.tags))].sort(),
+    [expenses],
+  );
+  const visible = useMemo(
+    () => filterExpenses(expenses, filterTags, itemQuery),
+    [expenses, filterTags, itemQuery]
+  );
+  // Only ticked expenses that are currently shown count toward the summary
   const selectedExpenses = useMemo(
-    () => expenses.filter((e) => selectedIds.has(e.id)),
-    [expenses, selectedIds]
+    () => visible.map((m) => m.expense).filter((e) => selectedIds.has(e.id)),
+    [visible, selectedIds]
   );
   const debts = useMemo(
     () =>
@@ -92,6 +107,12 @@ export default function HomePage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function toggleFilterTag(tag: string) {
+    setFilterTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   }
 
   function personName(id: string): string {
@@ -199,7 +220,52 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* ── Expense list ────────────────────────────────────────────────── */}
+      {/* ── Search + tag filter ─────────────────────────────────────────── */}
+      {loadState === "ready" && expenses.length > 0 && (
+        <div className="space-y-3">
+          <Input
+            type="search"
+            value={itemQuery}
+            onChange={(e) => setItemQuery(e.target.value)}
+            placeholder="Search items, e.g. milk"
+            aria-label="Search items by name"
+          />
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-ink-muted mr-1">Tags:</span>
+              {allTags.map((tag) => {
+                const on = filterTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleFilterTag(tag)}
+                    aria-pressed={on}
+                    className={[
+                      "px-2.5 py-0.5 text-xs font-medium rounded-full border transition-colors",
+                      on
+                        ? "bg-accent text-white border-accent"
+                        : "bg-surface text-ink border-rim hover:border-rim-strong",
+                    ].join(" ")}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+              {filterTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilterTags([])}
+                  className="text-xs text-ink-muted hover:text-ink ml-1"
+                >
+                  Clear tags
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Selection summary ───────────────────────────────────────────── */}
       {loadState === "ready" && expenses.length > 0 && (
         <Card padding="md">
@@ -215,7 +281,9 @@ export default function HomePage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedIds(new Set(expenses.map((e) => e.id)))}
+                onClick={() =>
+                  setSelectedIds(new Set(visible.map((m) => m.expense.id)))
+                }
               >
                 Select all
               </Button>
@@ -256,9 +324,14 @@ export default function HomePage() {
         </Card>
       )}
 
-      {loadState === "ready" && expenses.length > 0 && (
+      {/* ── Expense list ────────────────────────────────────────────────── */}
+      {loadState === "ready" && expenses.length > 0 && visible.length === 0 && (
+        <p className="text-sm text-ink-muted">No expenses match.</p>
+      )}
+
+      {loadState === "ready" && visible.length > 0 && (
         <div className="space-y-2">
-          {expenses.map((exp) => {
+          {visible.map(({ expense: exp, matchedItems }) => {
             const label = exp.store ?? exp.description ?? "Expense";
             const payerName =
               exp.payer?.name ?? personById.get(exp.payerId)?.name ?? "Unknown";
@@ -306,6 +379,23 @@ export default function HomePage() {
                           Paid by {payerName}
                           {perPersonGlance ? ` · ${perPersonGlance}` : ""}
                         </p>
+                        {matchedItems.length > 0 && (
+                          <p className="mt-0.5 text-xs text-ink truncate">
+                            Items: {matchedItems.join(", ")}
+                          </p>
+                        )}
+                        {exp.tags.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {exp.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 text-[11px] font-medium text-ink-muted bg-canvas border border-rim rounded-full"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Right: total + logged */}
