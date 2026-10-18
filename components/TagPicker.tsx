@@ -36,7 +36,7 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
     return (
       <p className="text-sm text-ink-muted">
         No tags yet.{" "}
-        <Link href="/tags" className="text-accent hover:underline">
+        <Link href="/tags" className="font-semibold text-ink underline underline-offset-4">
           Create tags
         </Link>
       </p>
@@ -55,14 +55,13 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
             disabled={disabled}
             aria-pressed={on}
             className={[
-              "px-2.5 py-0.5 text-xs font-medium rounded-full border transition-colors",
+              "h-8 px-3.5 text-sm font-semibold rounded-full border border-ink transition-colors",
+              "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
               "disabled:opacity-50 disabled:pointer-events-none",
-              on
-                ? "bg-accent text-white border-accent"
-                : "bg-surface text-ink border-rim hover:border-rim-strong",
+              on ? "bg-ink text-white" : "bg-surface text-ink hover:bg-sun",
             ].join(" ")}
           >
-            {tag}
+            {on ? "✓ " : ""}#{tag}
           </button>
         );
       })}
