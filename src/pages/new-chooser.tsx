@@ -14,7 +14,7 @@ const SPLIT_CHOICES = [
   {
     path: "/expenses/new/itemized",
     title: "Receipt",
-    body: "Snap or type a store receipt, then pick who shares each item.",
+    body: "Type in a store receipt, then pick who shares each item.",
     color: "bg-lavender",
   },
 ] as const;
