@@ -15,7 +15,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { name, colorHex, isDefault, archived } = body ?? {}
+  const { name, colorHex, isDefault, isMe, archived } = body ?? {}
 
   const data: Record<string, unknown> = {}
   if (name !== undefined) {
@@ -27,9 +27,19 @@ export async function PATCH(
   if (colorHex !== undefined) data.colorHex = colorHex
   if (isDefault !== undefined) data.isDefault = isDefault
   if (archived !== undefined) data.archived = archived
+  if (isMe !== undefined) {
+    if (typeof isMe !== 'boolean') {
+      return NextResponse.json({ error: 'isMe must be a boolean' }, { status: 400 })
+    }
+    data.isMe = isMe
+  }
 
   try {
-    const person = await prisma.person.update({ where: { id }, data })
+    const person = await prisma.$transaction(async (tx) => {
+      // Only one person can be you
+      if (isMe === true) await tx.person.updateMany({ where: { id: { not: id } }, data: { isMe: false } })
+      return tx.person.update({ where: { id }, data })
+    })
     return NextResponse.json(person)
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
