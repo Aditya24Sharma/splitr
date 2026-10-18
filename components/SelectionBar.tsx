@@ -196,7 +196,7 @@ export function SelectionBar({
               className="px-2 sm:px-3.5"
               onClick={() => toggle("settle")}
             >
-              Settle<span className="hidden sm:inline">&nbsp;up</span>
+              Settle<span className="hidden sm:inline">up</span>
             </Button>
             <Button
               variant={panel === "tag" ? "primary" : "secondary"}
