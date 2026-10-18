@@ -21,6 +21,16 @@ export async function GET(
       participants: true,
       payer: true,
       tags: { orderBy: { name: 'asc' } },
+      // select, not include: the bank row holds the Plaid access token
+      transaction: {
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          source: true,
+          account: { select: { name: true, mask: true, item: { select: { institutionName: true } } } },
+        },
+      },
     },
   })
 

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
+import { txLabel, type TxView } from "@/lib/transactions";
+import { loadSourceTx } from "@/lib/source-tx";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
@@ -26,6 +28,7 @@ interface Person {
   name: string;
   colorHex: string;
   isDefault: boolean;
+  isMe: boolean;
   archived: boolean;
 }
 
@@ -104,12 +107,14 @@ function savedItemToRow(it: SavedExpense["items"][number]): ItemRow {
 export default function NewItemizedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; fromTx?: string }>;
 }) {
-  // ?edit=<id> opens this form pre-filled to edit a saved expense
-  const { edit: editId } = use(searchParams);
+  // ?edit=<id> opens this form pre-filled to edit a saved expense;
+  // ?fromTx=<id> pre-fills it from a charge in Money and links the two
+  const { edit: editId, fromTx } = use(searchParams);
   const router = useRouter();
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
+  const [sourceTx, setSourceTx] = useState<TxView | null>(null);
 
   // People
   const [people, setPeople] = useState<Person[]>([]);
@@ -151,8 +156,9 @@ export default function NewItemizedPage({
     Promise.all([
       fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
       editId ? loadSavedExpense(editId) : null,
+      fromTx && !editId ? loadSourceTx(fromTx) : null,
     ])
-      .then(([data, saved]) => {
+      .then(([data, saved, tx]) => {
         setPeople(data);
         if (saved) {
           const active = new Set(data.map((p) => p.id));
@@ -173,20 +179,27 @@ export default function NewItemizedPage({
           setStep("table");
           return;
         }
-        const def = data.find((p) => p.isDefault) ?? data[0];
+        if (tx) {
+          setSourceTx(tx);
+          setStore(txLabel(tx));
+          setPurchasedAt(tx.date);
+        }
+        // A charge from Money is yours, so you paid
+        const def = (tx && data.find((p) => p.isMe)) || data.find((p) => p.isDefault) || data[0];
         if (def) setPayerId(def.id);
       })
       .catch((err) => {
-        if (editId) {
+        if (editId || fromTx) {
           setEditLoadError(err instanceof Error ? err.message : "Couldn't load the expense.");
         }
       })
       .finally(() => setPeopleLoading(false));
-  }, [editId]);
+  }, [editId, fromTx]);
 
-  // Derived: IDs of default (roommate) people — used as initial assignees
+  // Derived: IDs of default (roommate) people — used as initial assignees.
+  // On your own charge you're in on every item too, unless you untick yourself.
   const defaultAssigneeIds = people
-    .filter((p) => p.isDefault)
+    .filter((p) => p.isDefault || (sourceTx && p.isMe))
     .map((p) => p.id);
 
   // ---------------------------------------------------------------------------
@@ -194,7 +207,7 @@ export default function NewItemizedPage({
   // ---------------------------------------------------------------------------
 
   function enterManually() {
-    const ids = people.filter((p) => p.isDefault).map((p) => p.id);
+    const ids = defaultAssigneeIds;
     setRows([makeRow(ids)]);
     setParseError(null);
     setStep("table");
@@ -227,7 +240,7 @@ export default function NewItemizedPage({
       }
 
       const parsed: ParsedReceipt = await res.json();
-      const ids = people.filter((p) => p.isDefault).map((p) => p.id);
+      const ids = defaultAssigneeIds;
 
       setRows(parsed.items.map((it) => parsedItemToRow(it, ids)));
       setStore(parsed.store ?? "");
@@ -243,7 +256,7 @@ export default function NewItemizedPage({
         err instanceof Error ? err.message : "Receipt parse failed";
       setParseError(msg);
       // Fall back to an empty editable table so manual entry is always available
-      const ids = people.filter((p) => p.isDefault).map((p) => p.id);
+      const ids = defaultAssigneeIds;
       setRows([makeRow(ids)]);
       setStep("table");
     } finally {
@@ -358,6 +371,7 @@ export default function NewItemizedPage({
       ...(purchasedAt ? { purchasedAt } : {}),
       tags,
       payerId,
+      ...(sourceTx && { transactionId: sourceTx.id }),
       taxCents: toCents(parseFloat(taxDollars) || 0),
       items: rows.map((row) => ({
         name: row.name.trim() || "Item",
@@ -440,8 +454,8 @@ export default function NewItemizedPage({
         >
           {editLoadError}
         </p>
-        <Link href={`/expenses/${editId}`}>
-          <Button variant="secondary">Back to expense</Button>
+        <Link href={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}>
+          <Button variant="secondary">{editId ? "Back to expense" : "Back"}</Button>
         </Link>
       </div>
     );
@@ -469,10 +483,10 @@ export default function NewItemizedPage({
     <div className="space-y-9">
       <header>
         <Link
-          href={editId ? `/expenses/${editId}` : "/expenses/new"}
+          href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
           className="text-sm font-semibold text-ink-muted hover:text-ink"
         >
-          ← {editId ? "Back to expense" : "New expense"}
+          ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
         </Link>
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit receipt" : "Receipt"}
@@ -480,6 +494,12 @@ export default function NewItemizedPage({
         {editId && (
           <p className="mt-3 text-sm text-ink-muted">
             Saving clears &ldquo;logged to Splitwise&rdquo; so you remember to update it there.
+          </p>
+        )}
+        {sourceTx && (
+          <p className="mt-3 text-sm text-ink-muted">
+            For your <span className="font-semibold text-ink tabular-nums">{formatUSD(sourceTx.amount)}</span>{" "}
+            charge. Your share comes off what you spent in Money.
           </p>
         )}
       </header>
@@ -635,16 +655,28 @@ export default function NewItemizedPage({
             summary={
               <>
                 <span className="font-semibold tabular-nums">{formatUSD(itemsTotalCents)}</span>
-                <span className="text-ink-muted">
-                  {" "}· {rows.length} item{rows.length === 1 ? "" : "s"}
-                </span>
+                {sourceTx ? (
+                  <span
+                    className={
+                      itemsTotalCents === sourceTx.amount ? "text-ink-muted" : "text-danger font-semibold"
+                    }
+                  >
+                    {itemsTotalCents === sourceTx.amount
+                      ? " · matches the charge"
+                      : ` of ${formatUSD(sourceTx.amount)} charge`}
+                  </span>
+                ) : (
+                  <span className="text-ink-muted">
+                    {" "}· {rows.length} item{rows.length === 1 ? "" : "s"}
+                  </span>
+                )}
               </>
             }
             saveLabel={editId ? "Save changes" : "Save"}
             canSave={canSave}
             saving={saving}
             onSave={handleSave}
-            cancelHref={editId ? `/expenses/${editId}` : "/"}
+            cancelHref={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}
           >
             <span className="hidden sm:inline-flex">
               <CopyButton summary={copySummary} disabled={!copySummary} />

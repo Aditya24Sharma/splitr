@@ -25,9 +25,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `unknown tag: ${missing.join(', ')}` }, { status: 400 })
   }
 
+  // Optional: the bank or hand-added transaction this split was made from
+  const { transactionId } = (body ?? {}) as { transactionId?: unknown }
+  if (transactionId !== undefined) {
+    if (!Number.isInteger(transactionId)) {
+      return NextResponse.json({ error: 'transactionId must be an integer' }, { status: 400 })
+    }
+    const source = await prisma.transaction.findUnique({
+      where: { id: transactionId as number },
+      select: { expense: { select: { id: true } } },
+    })
+    if (!source) return NextResponse.json({ error: 'That transaction no longer exists' }, { status: 400 })
+    if (source.expense) {
+      return NextResponse.json({ error: 'That transaction is already split' }, { status: 409 })
+    }
+  }
+
   const expense = await prisma.$transaction(async (tx) => {
     const exp = await tx.expense.create({
-      data: { ...expenseFields(input), tags: { connect: connectTags(input.tags) } },
+      data: {
+        ...expenseFields(input),
+        tags: { connect: connectTags(input.tags) },
+        ...(transactionId !== undefined && { transactionId: transactionId as number }),
+      },
     })
     await createExpenseChildren(tx, exp.id, input)
     return tx.expense.findUniqueOrThrow({

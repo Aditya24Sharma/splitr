@@ -12,6 +12,8 @@ import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
 import { expenseDay } from "@/lib/expense-filter";
+import { txLabel, type TxView } from "@/lib/transactions";
+import { loadSourceTx } from "@/lib/source-tx";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +24,7 @@ interface Person {
   name: string;
   colorHex: string;
   isDefault: boolean;
+  isMe: boolean;
   archived: boolean;
 }
 
@@ -58,12 +61,14 @@ async function loadSavedExpense(id: string): Promise<SavedExpense> {
 export default function NewSimplePage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; fromTx?: string }>;
 }) {
-  // ?edit=<id> opens this form pre-filled to edit a saved expense
-  const { edit: editId } = use(searchParams);
+  // ?edit=<id> opens this form pre-filled to edit a saved expense;
+  // ?fromTx=<id> pre-fills it from a charge in Money and links the two
+  const { edit: editId, fromTx } = use(searchParams);
   const router = useRouter();
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
+  const [sourceTx, setSourceTx] = useState<TxView | null>(null);
 
   // People
   const [people, setPeople] = useState<Person[]>([]);
@@ -97,8 +102,9 @@ export default function NewSimplePage({
     Promise.all([
       fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
       editId ? loadSavedExpense(editId) : null,
+      fromTx && !editId ? loadSourceTx(fromTx) : null,
     ])
-      .then(([data, saved]) => {
+      .then(([data, saved, tx]) => {
         setPeople(data);
         if (saved) {
           const active = new Set(data.map((p) => p.id));
@@ -123,21 +129,35 @@ export default function NewSimplePage({
           );
           return;
         }
-        const def = data.find((p) => p.isDefault) ?? data[0];
-        if (def) setPayerId(def.id);
         // Pre-check default (roommate) people
         const defaultIds = new Set(
           data.filter((p) => p.isDefault).map((p) => p.id)
         );
+        if (tx) {
+          setSourceTx(tx);
+          setAmountDollars((tx.amount / 100).toFixed(2));
+          setDescription(txLabel(tx));
+          setPurchasedAt(tx.date);
+          // It's your charge, so you paid and you're in on it
+          const me = data.find((p) => p.isMe);
+          if (me) {
+            setPayerId(me.id);
+            defaultIds.add(me.id);
+          }
+          setParticipantIds(defaultIds);
+          return;
+        }
+        const def = data.find((p) => p.isDefault) ?? data[0];
+        if (def) setPayerId(def.id);
         setParticipantIds(defaultIds.size > 0 ? defaultIds : new Set());
       })
       .catch((err) => {
-        if (editId) {
+        if (editId || fromTx) {
           setEditLoadError(err instanceof Error ? err.message : "Couldn't load the expense.");
         }
       })
       .finally(() => setPeopleLoading(false));
-  }, [editId]);
+  }, [editId, fromTx]);
 
   // ---------------------------------------------------------------------------
   // Derived values
@@ -262,6 +282,7 @@ export default function NewSimplePage({
       payerId,
       totalCents,
       splitMethod,
+      ...(sourceTx && { transactionId: sourceTx.id }),
       participants: participantList.map((p) => ({
         personId: p.id,
         ...(splitMethod === "EXACT"
@@ -309,8 +330,8 @@ export default function NewSimplePage({
         >
           {editLoadError}
         </p>
-        <Link href={`/expenses/${editId}`}>
-          <Button variant="secondary">Back to expense</Button>
+        <Link href={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}>
+          <Button variant="secondary">{editId ? "Back to expense" : "Back"}</Button>
         </Link>
       </div>
     );
@@ -342,10 +363,10 @@ export default function NewSimplePage({
     <div className="space-y-9">
       <header>
         <Link
-          href={editId ? `/expenses/${editId}` : "/expenses/new"}
+          href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
           className="text-sm font-semibold text-ink-muted hover:text-ink"
         >
-          ← {editId ? "Back to expense" : "New expense"}
+          ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
         </Link>
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit split" : "Quick split"}
@@ -353,6 +374,12 @@ export default function NewSimplePage({
         {editId && (
           <p className="mt-3 text-sm text-ink-muted">
             Saving clears &ldquo;logged to Splitwise&rdquo; so you remember to update it there.
+          </p>
+        )}
+        {sourceTx && (
+          <p className="mt-3 text-sm text-ink-muted">
+            From your <span className="font-semibold text-ink tabular-nums">{formatUSD(sourceTx.amount)}</span>{" "}
+            charge. Your share comes off what you spent in Money.
           </p>
         )}
       </header>
@@ -404,6 +431,7 @@ export default function NewSimplePage({
         {peopleLoading ? (
           <p className="text-sm text-ink-faint">Loading…</p>
         ) : (
+          <>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
             {people.map((p) => (
               <PersonChip
@@ -415,6 +443,13 @@ export default function NewSimplePage({
               />
             ))}
           </div>
+          {sourceTx && !people.some((p) => p.isMe) && (
+            <p className="text-sm text-ink-muted">
+              Pick yourself. To skip this next time, mark yourself as{" "}
+              <Link href="/people" className="font-semibold underline underline-offset-4">This is me</Link>.
+            </p>
+          )}
+          </>
         )}
       </Section>
 
@@ -564,7 +599,7 @@ export default function NewSimplePage({
         canSave={canSave}
         saving={saving}
         onSave={handleSave}
-        cancelHref={editId ? `/expenses/${editId}` : "/"}
+        cancelHref={editId ? `/expenses/${editId}` : fromTx ? `/transactions/${fromTx}` : "/splits"}
       />
     </div>
   );
