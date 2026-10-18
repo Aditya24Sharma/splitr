@@ -46,9 +46,9 @@ export function BulkAssignBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 bg-canvas border border-rim rounded-lg">
-      <span className="text-sm text-ink-muted shrink-0">
-        {selectedRowIds.size} row{selectedRowIds.size > 1 ? "s" : ""} selected:
+    <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-ink text-white rounded-3xl">
+      <span className="text-sm font-semibold shrink-0">
+        {selectedRowIds.size} item{selectedRowIds.size > 1 ? "s" : ""} — tap to toggle:
       </span>
       <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
         {people.map((person) => (
@@ -65,7 +65,7 @@ export function BulkAssignBar({
       <button
         type="button"
         onClick={onClearSelection}
-        className="text-xs text-ink-muted hover:text-ink shrink-0 px-1.5 py-0.5 rounded hover:bg-canvas transition-colors"
+        className="text-sm font-semibold underline underline-offset-4 shrink-0 px-1.5"
         aria-label="Clear row selection"
       >
         Clear

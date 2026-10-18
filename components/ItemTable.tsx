@@ -88,34 +88,33 @@ export function ItemTable({
 
   // Shared input classes for inline compact inputs
   const cellInput =
-    "bg-transparent border border-rim rounded-md text-ink text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent transition-colors";
+    "h-8 bg-mist border border-transparent rounded-full text-ink text-sm tabular-nums hover:border-rim focus:outline-none focus:border-ink focus:bg-surface focus:ring-4 focus:ring-sun/60 transition-colors [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const tick = "w-5 h-5 shrink-0 accent-[#0B0B0C] cursor-pointer";
 
   return (
     <div className="space-y-3">
       {/* Select-all toggle */}
       {rows.length > 0 && (
-        <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer select-none w-fit">
+        <label className="flex items-center gap-2.5 px-4 text-sm text-ink-muted cursor-pointer select-none w-fit">
           <input
             type="checkbox"
             checked={allSelected}
             onChange={onToggleSelectAll}
-            className="w-4 h-4 rounded border-rim accent-accent"
-            aria-label="Select all rows for bulk assignment"
+            className={tick}
+            aria-label="Select all items to assign people in bulk"
           />
-          Select all for bulk assignment
+          Select all to assign in bulk
         </label>
       )}
 
       {/* Item rows */}
-      <div className="space-y-2">
+      <div className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
         {rows.map((row, idx) => (
           <div
             key={row.id}
             className={[
-              "border rounded-lg p-3 space-y-2.5 transition-colors",
-              selectedRowIds.has(row.id)
-                ? "border-accent/40 bg-accent-dim/20"
-                : "border-rim bg-surface",
+              "px-4 py-3.5 space-y-2.5 transition-colors",
+              selectedRowIds.has(row.id) ? "bg-sun/40" : "bg-surface",
             ].join(" ")}
           >
             {/* Row header: checkbox + name + delete */}
@@ -124,8 +123,8 @@ export function ItemTable({
                 type="checkbox"
                 checked={selectedRowIds.has(row.id)}
                 onChange={() => onToggleRowSelect(row.id)}
-                className="w-4 h-4 rounded border-rim accent-accent shrink-0"
-                aria-label={`Select row ${idx + 1} for bulk assignment`}
+                className={tick}
+                aria-label={`Select item ${idx + 1} for bulk assignment`}
               />
               <input
                 type="text"
@@ -133,12 +132,12 @@ export function ItemTable({
                 onChange={(e) => onRowChange(row.id, "name", e.target.value)}
                 placeholder="Item name"
                 aria-label={`Row ${idx + 1} item name`}
-                className={`flex-1 min-w-0 px-2.5 py-1.5 ${cellInput}`}
+                className={`flex-1 min-w-0 px-3 font-semibold ${cellInput}`}
               />
               <button
                 type="button"
                 onClick={() => onDeleteRow(row.id)}
-                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-xl leading-none text-ink-faint hover:text-danger hover:bg-danger-dim transition-colors"
+                className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-xl leading-none text-ink-faint hover:text-white hover:bg-danger transition-colors"
                 aria-label={`Delete row ${idx + 1}`}
               >
                 ×
@@ -146,7 +145,7 @@ export function ItemTable({
             </div>
 
             {/* Qty × Unit = Line total */}
-            <div className="flex flex-wrap items-center gap-1.5 ml-6 text-sm text-ink-faint">
+            <div className="flex flex-wrap items-center gap-1.5 ml-7 text-sm text-ink-faint">
               <input
                 type="number"
                 value={row.quantity}
@@ -156,12 +155,12 @@ export function ItemTable({
                 min="0"
                 step="1"
                 aria-label={`Row ${idx + 1} quantity`}
-                className={`w-14 px-2 py-1 text-center ${cellInput}`}
+                className={`w-14 px-2 text-center ${cellInput}`}
               />
               <span aria-hidden="true">×</span>
               <div className="relative">
                 <span
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"
                   aria-hidden="true"
                 >
                   $
@@ -175,13 +174,13 @@ export function ItemTable({
                   min="0"
                   step="0.01"
                   aria-label={`Row ${idx + 1} unit price in dollars`}
-                  className={`w-24 pl-5 pr-2 py-1 ${cellInput}`}
+                  className={`w-24 pl-6 pr-3 ${cellInput}`}
                 />
               </div>
               <span aria-hidden="true">=</span>
               <div className="relative">
                 <span
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"
                   aria-hidden="true"
                 >
                   $
@@ -195,7 +194,7 @@ export function ItemTable({
                   min="0"
                   step="0.01"
                   aria-label={`Row ${idx + 1} line total in dollars`}
-                  className={`w-24 pl-5 pr-2 py-1 ${cellInput}`}
+                  className={`w-24 pl-6 pr-3 ${cellInput}`}
                 />
               </div>
             </div>
@@ -203,7 +202,7 @@ export function ItemTable({
             {/* Per-row assignee toggles */}
             {people.length > 0 && (
               <div
-                className="flex flex-wrap gap-1.5 ml-6"
+                className="flex flex-wrap gap-1.5 ml-7"
                 role="group"
                 aria-label={`Row ${idx + 1} assigned to`}
               >
@@ -228,13 +227,13 @@ export function ItemTable({
         variant="ghost"
         size="sm"
         onClick={onAddRow}
-        className="w-full justify-center border border-dashed border-rim-strong text-ink-muted"
+        className="w-full justify-center border-dashed !border-ink text-ink"
       >
         + Add item
       </Button>
 
       {/* Subtotal / Tax / Total footer */}
-      <div className="space-y-2 pt-3 border-t border-rim">
+      <div className="space-y-2.5 rounded-3xl bg-mist px-5 py-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-ink-muted">Items subtotal</span>
           <span className="font-medium text-ink tabular-nums">
@@ -260,20 +259,20 @@ export function ItemTable({
               onChange={(e) => onTaxChange(e.target.value)}
               min="0"
               step="0.01"
-              className="w-28 pl-5 pr-2 py-1 text-sm text-right bg-surface border border-rim rounded-md text-ink focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent transition-colors"
+              className={`w-28 pl-6 pr-3 text-right !bg-surface !border-ink ${cellInput}`}
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-sm font-semibold">
-          <span className="text-ink">Total</span>
-          <span className="text-ink tabular-nums">
+        <div className="flex items-baseline justify-between pt-2 border-t border-rim">
+          <span className="text-sm font-semibold">Total</span>
+          <span className="font-display text-4xl tabular-nums">
             {formatUSD(toCents(computedTotal))}
           </span>
         </div>
 
         {showReconcileWarning && (
-          <p className="text-xs text-ink-muted bg-canvas border border-rim-strong rounded-md px-2.5 py-1.5">
+          <p className="text-sm bg-sun rounded-2xl px-3 py-2">
             Note: computed total ({formatUSD(toCents(computedTotal))}) differs
             from parsed receipt total ({formatUSD(toCents(parsedTotal!))}).
             Adjust items or tax to reconcile.

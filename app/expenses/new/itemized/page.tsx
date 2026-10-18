@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { ItemTable, type ItemRow } from "@/components/ItemTable";
@@ -11,6 +10,9 @@ import { BulkAssignBar } from "@/components/BulkAssignBar";
 import { BreakdownCard } from "@/components/BreakdownCard";
 import { CopyButton } from "@/components/CopyButton";
 import { TagPicker } from "@/components/TagPicker";
+import { PersonChip } from "@/components/PersonChip";
+import { SaveBar } from "@/components/SaveBar";
+import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitItemized } from "@/lib/split";
 import type { ParsedReceipt } from "@/lib/types";
@@ -144,8 +146,8 @@ export default function NewItemizedPage({
   // Load people
   // ---------------------------------------------------------------------------
 
+  // peopleLoading starts true, so the effect only has to settle it
   useEffect(() => {
-    setPeopleLoading(true);
     Promise.all([
       fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
       editId ? loadSavedExpense(editId) : null,
@@ -433,7 +435,7 @@ export default function NewItemizedPage({
     return (
       <div className="py-8 space-y-4">
         <p
-          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           {editLoadError}
@@ -445,197 +447,150 @@ export default function NewItemizedPage({
     );
   }
 
-  return (
-    <div className="space-y-6 pb-16">
-      {/* Page heading */}
-      <div>
-        <h1 className="font-display text-3xl font-semibold text-ink">
-          {editId ? "Edit itemized expense" : "New itemized expense"}
-        </h1>
-        <p className="mt-1.5 text-sm text-ink-muted">
-          {editId
-            ? "Saving clears “logged to Splitwise” so you remember to update it there."
-            : "Upload a receipt photo to auto-fill items, or enter them manually."}
+  if (!peopleLoading && people.length === 0) {
+    return (
+      <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
+        <p className="font-display text-4xl uppercase">Add people first</p>
+        <p className="mt-3 text-sm text-ink-muted">
+          You need at least one person to split a receipt with.
         </p>
+        <Link href="/people" className="inline-block mt-6">
+          <Button variant="primary">Add people</Button>
+        </Link>
       </div>
+    );
+  }
 
-      {/* No people state */}
-      {!peopleLoading && people.length === 0 && (
-        <Card padding="lg">
-          <div className="text-center space-y-4">
-            <p className="text-sm text-ink">
-              Add roommates first — you need at least one person to split an expense with.
-            </p>
-            <Link href="/people">
-              <Button variant="primary">Add roommates</Button>
-            </Link>
-          </div>
-        </Card>
-      )}
+  const itemsTotalCents =
+    rows.reduce((sum, r) => sum + toCents(parseFloat(r.lineTotal) || 0), 0) +
+    toCents(parseFloat(taxDollars) || 0);
+
+  return (
+    <div className="space-y-9">
+      <header>
+        <Link
+          href={editId ? `/expenses/${editId}` : "/expenses/new"}
+          className="text-sm font-semibold text-ink-muted hover:text-ink"
+        >
+          ← {editId ? "Back to expense" : "New expense"}
+        </Link>
+        <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
+          {editId ? "Edit receipt" : "Receipt"}
+        </h1>
+        {editId && (
+          <p className="mt-3 text-sm text-ink-muted">
+            Saving clears &ldquo;logged to Splitwise&rdquo; so you remember to update it there.
+          </p>
+        )}
+      </header>
 
       {/* ── PHOTO STEP ──────────────────────────────────────────────────── */}
       {step === "photo" && (
-        <Card padding="lg">
-          <div className="flex flex-col items-center gap-5 py-4 text-center">
-            <div
-              className="w-16 h-16 rounded-xl bg-canvas border border-rim flex items-center justify-center"
-              aria-hidden="true"
+        <div className="rounded-3xl border border-ink bg-lavender px-6 py-12 text-center">
+          <p className="font-display text-5xl uppercase">Snap a receipt</p>
+          <p className="mt-3 text-sm max-w-sm mx-auto">
+            Take a photo or pick an image. Items, tax, and the store fill in
+            automatically, and you can fix anything after.
+          </p>
+          <div className="mt-7 flex flex-col items-center gap-3">
+            <Button
+              variant="primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={parsing}
             >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-ink-muted"
-              >
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-            </div>
+              {parsing ? "Reading receipt…" : "Choose photo"}
+            </Button>
 
-            <div>
-              <p className="text-sm font-medium text-ink">Upload a receipt</p>
-              <p className="mt-0.5 text-xs text-ink-muted">
-                Photo or image file — Gemini will extract items automatically
-              </p>
-            </div>
+            {/* Hidden file input — capture="environment" opens camera on mobile */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              className="sr-only"
+              aria-label="Upload receipt image"
+            />
 
-            <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-              <Button
-                variant="primary"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={parsing}
-                className="w-full"
-              >
-                {parsing ? "Parsing receipt…" : "Upload receipt photo"}
-              </Button>
-
-              {/* Hidden file input — capture="environment" opens camera on mobile */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                className="sr-only"
-                aria-label="Upload receipt image"
-              />
-
-              <button
-                type="button"
-                onClick={enterManually}
-                disabled={parsing}
-                className="text-sm text-ink-muted hover:text-ink underline underline-offset-2 disabled:opacity-50 disabled:pointer-events-none"
-              >
-                Enter manually instead
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={enterManually}
+              disabled={parsing}
+              className="text-sm font-semibold underline underline-offset-4 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              Type items instead
+            </button>
           </div>
-        </Card>
+        </div>
       )}
 
       {/* ── TABLE STEP ──────────────────────────────────────────────────── */}
       {step === "table" && (
         <>
-          {/* Parse error banner (non-blocking — user can still edit manually) */}
+          {/* Parse problems are non-blocking: the table is still editable */}
           {parseError && (
-            <div
-              className="flex items-start gap-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+            <p
+              className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
               role="alert"
             >
-              <span className="flex-1">
-                Could not parse receipt: {parseError}. You can still enter
-                items manually below.
-              </span>
-            </div>
+              Couldn&apos;t read that receipt ({parseError}). Enter the items below instead.
+            </p>
           )}
-
-          {/* Parse warnings (non-blocking) */}
           {parseWarnings.length > 0 && (
-            <div className="space-y-1.5" role="status">
+            <ul className="rounded-3xl bg-sun px-5 py-3 space-y-1 text-sm" role="status">
               {parseWarnings.map((w) => (
-                <div
-                  key={w}
-                  className="text-xs text-ink-muted bg-canvas border border-rim rounded-md px-3 py-2"
-                >
-                  Note: {w}
-                </div>
+                <li key={w}>Check: {w}</li>
               ))}
-            </div>
+            </ul>
           )}
 
-          {/* Store + Date */}
-          <Card padding="md">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Store / vendor" htmlFor="store-input">
-                <Input
-                  id="store-input"
-                  value={store}
-                  onChange={(e) => setStore(e.target.value)}
-                  placeholder="e.g. Walmart"
-                />
-              </Field>
-              <Field label="Date" htmlFor="date-input">
-                <Input
-                  id="date-input"
-                  type="date"
-                  value={purchasedAt}
-                  onChange={(e) => setPurchasedAt(e.target.value)}
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="Tags" hint="Click to add or remove. Manage the list on the Tags page.">
-                  <TagPicker value={tags} onChange={setTags} />
-                </Field>
-              </div>
-            </div>
-          </Card>
-
-          {/* Payer selector */}
-          <Card padding="md">
-            <Field label="Paid by" htmlFor="payer-select">
-              {peopleLoading ? (
-                <p className="text-sm text-ink-faint h-9 flex items-center">
-                  Loading…
-                </p>
-              ) : (
-                <select
-                  id="payer-select"
-                  value={payerId}
-                  onChange={(e) => setPayerId(e.target.value)}
-                  className="w-full px-3 py-2 h-9 text-sm bg-surface text-ink rounded-lg border border-rim focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent transition-colors"
-                >
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-4">
+            <Field label="Store" htmlFor="store-input">
+              <Input
+                id="store-input"
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                placeholder="Walmart, Costco…"
+              />
             </Field>
-          </Card>
+            <Field label="Date" htmlFor="date-input">
+              <Input
+                id="date-input"
+                type="date"
+                value={purchasedAt}
+                onChange={(e) => setPurchasedAt(e.target.value)}
+              />
+            </Field>
+          </div>
 
-          {/* Item table */}
-          <Card padding="md">
-            <h2 className="text-sm font-semibold text-ink mb-4">Items</h2>
-
-            {/* Bulk assign bar — visible when ≥1 row selected */}
-            {selectedRowIds.size > 0 && (
-              <div className="mb-3">
-                <BulkAssignBar
-                  selectedRowIds={selectedRowIds}
-                  rows={rows}
-                  people={people}
-                  onBulkToggle={handleBulkToggle}
-                  onClearSelection={() => setSelectedRowIds(new Set())}
-                />
+          <Section title="Who paid">
+            {peopleLoading ? (
+              <p className="text-sm text-ink-faint">Loading…</p>
+            ) : (
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
+                {people.map((p) => (
+                  <PersonChip
+                    key={p.id}
+                    name={p.name}
+                    colorHex={p.colorHex}
+                    selected={payerId === p.id}
+                    onClick={() => setPayerId(p.id)}
+                  />
+                ))}
               </div>
             )}
+          </Section>
 
+          <Section title={`Items · ${rows.length}`} hint="Tap people under each item to say who shares it.">
+            {selectedRowIds.size > 0 && (
+              <BulkAssignBar
+                selectedRowIds={selectedRowIds}
+                rows={rows}
+                people={people}
+                onBulkToggle={handleBulkToggle}
+                onClearSelection={() => setSelectedRowIds(new Set())}
+              />
+            )}
             <ItemTable
               rows={rows}
               people={people}
@@ -650,9 +605,8 @@ export default function NewItemizedPage({
               onToggleRowSelect={handleToggleRowSelect}
               onToggleSelectAll={handleToggleSelectAll}
             />
-          </Card>
+          </Section>
 
-          {/* Live breakdown */}
           <BreakdownCard
             items={rows.map((r) => ({
               id: r.id,
@@ -664,53 +618,38 @@ export default function NewItemizedPage({
             payerId={payerId}
           />
 
-          {/* Validation messages */}
-          {hasUnassigned && (
-            <p
-              className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
-              role="alert"
-            >
-              Every item must have at least one person assigned before saving.
-            </p>
-          )}
+          <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
+            <TagPicker value={tags} onChange={setTags} />
+          </Section>
 
           {saveError && (
             <p
-              className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
+              className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
               role="alert"
             >
               {saveError}
             </p>
           )}
 
-          {/* Action bar */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={!canSave}
-            >
-              {saving ? "Saving…" : editId ? "Save changes" : "Save expense"}
-            </Button>
-
-            <CopyButton summary={copySummary} disabled={!copySummary} />
-
-            {editId ? (
-              <Link href={`/expenses/${editId}`}>
-                <Button variant="ghost" size="sm">
-                  Cancel
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStep("photo")}
-              >
-                ← Back to photo
-              </Button>
-            )}
-          </div>
+          <SaveBar
+            summary={
+              <>
+                <span className="font-semibold tabular-nums">{formatUSD(itemsTotalCents)}</span>
+                <span className="text-ink-muted">
+                  {" "}· {rows.length} item{rows.length === 1 ? "" : "s"}
+                </span>
+              </>
+            }
+            saveLabel={editId ? "Save changes" : "Save"}
+            canSave={canSave}
+            saving={saving}
+            onSave={handleSave}
+            cancelHref={editId ? `/expenses/${editId}` : "/"}
+          >
+            <span className="hidden sm:inline-flex">
+              <CopyButton summary={copySummary} disabled={!copySummary} />
+            </span>
+          </SaveBar>
         </>
       )}
     </div>
