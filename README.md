@@ -1,63 +1,85 @@
 # Splitr
 
-A laptop-only personal tool for splitting restaurant bills and per-item store receipts (Walmart, Sam's Club, etc.) into clean per-person amounts you copy into Splitwise. No accounts, no server — single operator, local SQLite database.
+Personal money tracker and bill splitter. Linked banks (through Plaid) and
+hand-added expenses land in **Money**; any charge can be split with friends,
+and your share comes off what you spent. Splits give clean per-person amounts
+to copy into Splitwise.
+
+Runs on Cloudflare Workers with a D1 (SQLite) database, behind Cloudflare
+Access so only you can open it. Single user, no accounts.
 
 ---
 
-## Setup
+## Develop locally
 
-**Requirements:** [Node.js](https://nodejs.org) 22 or 24 LTS (anything ≥ 20.19 works). Check with `node -v`.
-
-### 0. Get the code
-
-Unzip `splitr.zip` (or `git clone` the repo) and open a terminal in the `splitr` folder.
-
-### 1. Install dependencies
+Requires Node.js 22+.
 
 ```bash
 npm install
+cp .env.example .env.local    # add your Plaid keys
+npm run db:migrate:local      # create the tables in a local D1 copy (.wrangler/)
+npm run dev                   # http://localhost:3000
 ```
 
-### 2. Create the database
+`next dev` gets the same `DB` binding as production from a local D1 database,
+via `initOpenNextCloudflareForDev()` in `next.config.ts`.
+
+To run the real Workers build locally (the same runtime as production), put
+the same keys in `.dev.vars` and run:
 
 ```bash
-npm run db:push
+npm run preview               # http://localhost:8787
 ```
 
-Creates `prisma/dev.db` (SQLite). `DATABASE_URL` defaults to `file:./prisma/dev.db` — no `.env` is needed for the database unless you want to override the path.
+### Changing the database
 
-### 3. Run
+D1 has no `prisma db push`. Edit `prisma/schema.prisma`, then write a migration:
 
 ```bash
-npm run dev
+npx prisma migrate diff --from-local-d1 --to-schema prisma/schema.prisma --script \
+  > prisma/migrations/000N_what_changed.sql
+npm run db:migrate:local
+npx wrangler d1 migrations apply splitr --remote   # when deploying
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+D1 has no transactions: Prisma's `$transaction` runs its steps one by one.
+Writes that must be all-or-nothing use a D1 batch (`lib/expense-write.ts`).
 
 ---
 
-## Usage — the Splitwise workflow
+## Deploy
 
-**Step 1 — Add people** (`/people`)  
-Add your roommates and regular friends. Check "default" for roommates so they're pre-selected on every new expense.
+```bash
+npm run deploy
+```
 
-**Step 2 — Create an expense**
+Secrets are set once with `npx wrangler secret put <NAME>` for each key in
+`.env.example`.
 
-- **Itemized** (`/expenses/new/itemized`): type in the receipt items → assign who shares each item → bulk-assign the common ones → pick who paid.  
-- **Simple** (`/expenses/new/simple`): type a total and description → split evenly or enter exact per-person amounts.
-
-**Step 3 — Copy and paste into Splitwise**  
-Open the expense detail page, read the per-person breakdown, click **Copy for Splitwise**, paste into a new Splitwise expense, then check **Mark as logged**.
+The app is served only at `money.aditya24sharma.dev`; `workers_dev` and preview
+URLs are off in `wrangler.jsonc`, because they would skip the Access login.
 
 ---
+
+## Usage
+
+- **Money**: spending by month, where it went, and every transaction. **Sync**
+  pulls new charges; **+ Add expense** logs cash. Tap **Split** on a charge to
+  split it.
+- **Splits**: every split; tick several to see who owes whom overall.
+- **People**: who you split with. Mark yourself with **This is me** so splits
+  from your charges start with you as the payer.
+- **Banks**: link, sync, or unlink banks.
+
+Spending leaves out money moving between your own accounts (transfers and
+credit card payments), so a purchase isn't counted twice.
 
 ## How the math works
 
-- All amounts are tracked in **integer cents** — no floating-point rounding.
-- For itemized receipts, tax is **prorated across items by price** so the person who buys more expensive items absorbs proportionally more tax.
-- Per-person totals are reconciled with a **largest-remainder algorithm** so they sum exactly to the receipt total with no first-person penny bias.
-
----
+- All amounts are integer cents.
+- Receipt tax is prorated across items by price.
+- Per-person totals use a largest-remainder method so they add up to the total
+  exactly.
 
 ## Tests
 
@@ -65,10 +87,7 @@ Open the expense detail page, read the per-person breakdown, click **Copy for Sp
 npm test
 ```
 
-Runs the Vitest unit suite (split engine, money utilities, validation, breakdown logic). Currently 28 tests across 5 files.
-
----
-
 ## Tech stack
 
-Next.js 16 · TypeScript · Tailwind CSS v4 · Prisma 7 + SQLite (better-sqlite3 driver adapter) · Vitest
+Next.js 16 · TypeScript · Tailwind CSS v4 · Prisma 7 + Cloudflare D1 ·
+OpenNext for Cloudflare · Plaid (called with fetch) · Vitest
