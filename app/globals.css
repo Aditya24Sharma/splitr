@@ -1,32 +1,46 @@
 @import "tailwindcss";
 
 @theme {
-  /* Canvas & surface */
-  --color-canvas: #F8F6F2;
+  /* Paper & surfaces */
+  --color-canvas: #FFFFFF;
   --color-surface: #FFFFFF;
+  --color-mist: #F2F2EF;
 
-  /* Borders */
-  --color-rim: #E2DDD7;
-  --color-rim-strong: #C5BEB5;
+  /* Lines: rim for quiet dividers, ink for outlines */
+  --color-rim: #E4E3DF;
+  --color-rim-strong: #0B0B0C;
 
   /* Text */
-  --color-ink: #1C1A17;
-  --color-ink-muted: #68625A;
-  --color-ink-faint: #A89F95;
+  --color-ink: #0B0B0C;
+  --color-ink-muted: #55534E;
+  --color-ink-faint: #8F8C86;
 
-  /* Brand accent — terracotta */
-  --color-accent: #B55A28;
-  --color-accent-dim: #F4EBE4;
-  --color-accent-hover: #9E4F23;
+  /* Accent is ink: black pills, black toggles. Hover and highlight are sun. */
+  --color-accent: #0B0B0C;
+  --color-accent-hover: #5C4ADE;
+  --color-accent-dim: #FFD731;
+
+  /* Pastels for state */
+  --color-sun: #FFD731;
+  --color-sky: #DCEEFF;
+  --color-mint: #55DB9C;
+  --color-mint-dim: #DDF7EA;
+  --color-lavender: #E9CCFF;
 
   /* Destructive */
-  --color-danger: #A82828;
-  --color-danger-dim: #FAECEC;
+  --color-danger: #D9370B;
+  --color-danger-dim: #FFEBE3;
 
-  /* Fonts */
-  --font-display: var(--font-lora), Georgia, "Times New Roman", serif;
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* Slightly larger small text for readability */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.35;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.45;
+
+  /* Fonts: Anton for display, Inter Tight for everything you read */
+  --font-display: var(--font-anton), Impact, "Arial Narrow", sans-serif;
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 html {
@@ -35,6 +49,37 @@ html {
   background-color: var(--color-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--color-sun);
+  color: var(--color-ink);
+}
+
+/* Display headings: Anton has one weight, so never fake-bold it */
+.font-display {
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.95;
+}
+
+/* Money and dates line up in columns */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Gentle staggered entrance for lists; off for reduced motion */
+.rise {
+  animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
 }
 
 /* Ensure color inputs look consistent */
