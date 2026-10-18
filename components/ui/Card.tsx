@@ -7,9 +7,9 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const PADDING_CLASSES: Record<Padding, string> = {
-  sm: "p-3",
-  md: "p-4",
-  lg: "p-5 sm:p-6",
+  sm: "p-3.5",
+  md: "p-5",
+  lg: "p-6 sm:p-8",
 };
 
 export function Card({
@@ -21,7 +21,7 @@ export function Card({
   return (
     <div
       className={[
-        "bg-surface border border-rim rounded-xl",
+        "bg-surface border border-ink rounded-3xl",
         PADDING_CLASSES[padding],
         className,
       ].join(" ")}

@@ -10,18 +10,16 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-accent text-white border-transparent hover:bg-accent-hover focus-visible:ring-accent/40",
-  secondary:
-    "bg-surface text-ink border-rim hover:bg-canvas focus-visible:ring-ink/20",
+    "bg-ink text-white border-ink hover:bg-accent-hover hover:border-accent-hover",
+  secondary: "bg-surface text-ink border-ink hover:bg-sun",
   ghost:
-    "bg-transparent text-ink-muted border-transparent hover:bg-canvas hover:text-ink focus-visible:ring-ink/20",
-  danger:
-    "bg-danger-dim text-danger border-danger/20 hover:bg-danger/10 focus-visible:ring-danger/30",
+    "bg-transparent text-ink-muted border-transparent hover:text-ink hover:bg-mist",
+  danger: "bg-surface text-danger border-danger hover:bg-danger-dim",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-sm rounded-md h-8",
-  md: "px-4 py-2 text-sm rounded-lg h-9",
+  sm: "h-8 px-3.5 text-sm",
+  md: "h-10 px-5 text-sm",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -43,10 +41,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         disabled={disabled}
         className={[
-          "inline-flex items-center justify-center gap-1.5 border font-medium",
-          "transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-          "disabled:opacity-50 disabled:pointer-events-none",
+          "inline-flex items-center justify-center gap-1.5 whitespace-nowrap",
+          "rounded-full border font-semibold transition-[background-color,color,transform] duration-150",
+          "active:scale-[0.97]",
+          "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
+          "disabled:opacity-40 disabled:pointer-events-none",
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],
           className,

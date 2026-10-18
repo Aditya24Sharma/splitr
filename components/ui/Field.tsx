@@ -17,7 +17,7 @@ export function Field({ label, htmlFor, hint, error, children }: FieldProps) {
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={htmlFor}
-        className="text-sm font-medium text-ink leading-none"
+        className="text-sm font-semibold text-ink leading-none"
       >
         {label}
       </label>
@@ -48,12 +48,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         className={[
-          "w-full px-3 py-2 h-9 text-sm bg-surface text-ink rounded-lg border",
+          "w-full px-4 h-10 text-sm bg-surface text-ink rounded-full border",
           "placeholder:text-ink-faint",
           "transition-colors",
-          "focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent",
-          "disabled:opacity-50 disabled:bg-canvas",
-          hasError ? "border-danger" : "border-rim",
+          "focus:outline-none focus:ring-4 focus:ring-sun/70",
+          "disabled:opacity-50 disabled:bg-mist",
+          hasError ? "border-danger" : "border-ink",
           className,
         ].join(" ")}
         {...props}
@@ -78,12 +78,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         ref={ref}
         className={[
-          "w-full px-3 py-2 text-sm bg-surface text-ink rounded-lg border",
+          "w-full px-4 py-2.5 text-sm bg-surface text-ink rounded-2xl border",
           "placeholder:text-ink-faint resize-none",
           "transition-colors",
-          "focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent",
-          "disabled:opacity-50 disabled:bg-canvas",
-          hasError ? "border-danger" : "border-rim",
+          "focus:outline-none focus:ring-4 focus:ring-sun/70",
+          "disabled:opacity-50 disabled:bg-mist",
+          hasError ? "border-danger" : "border-ink",
           className,
         ].join(" ")}
         {...props}

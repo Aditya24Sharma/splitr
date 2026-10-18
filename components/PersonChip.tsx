@@ -1,8 +1,8 @@
 /**
  * PersonChip — avatar (initials on colorHex background) + name label.
  *
- * Selected state: 2px accent ring + accent-tinted background.
- * Deliberately avoids colored dots, glow effects, and uppercase labels.
+ * A pill: round avatar + name. Selected = sun background with an ink outline;
+ * unselected = quiet grey outline that darkens on hover.
  */
 
 interface PersonChipProps {
@@ -50,21 +50,23 @@ export function PersonChip({
 
   const avatarClasses =
     size === "sm"
-      ? "w-5 h-5 rounded text-[9px]"
-      : "w-7 h-7 rounded-md text-[11px]";
+      ? "w-5 h-5 rounded-full text-[9px]"
+      : "w-7 h-7 rounded-full text-[11px]";
 
-  const chipPadding = size === "sm" ? "px-2 py-1 gap-1.5" : "px-2.5 py-1.5 gap-2";
+  const chipPadding = size === "sm" ? "pl-1 pr-2.5 py-1 gap-1.5" : "pl-1 pr-3 py-1 gap-2";
   const textSize = size === "sm" ? "text-xs" : "text-sm";
 
   const baseClasses = [
-    "inline-flex items-center border font-medium transition-all",
-    "rounded-lg",
+    "inline-flex items-center border font-medium transition-colors",
+    "rounded-full",
     chipPadding,
     textSize,
     selected
-      ? "border-accent bg-accent-dim text-accent ring-2 ring-accent/20 ring-offset-1 ring-offset-surface"
-      : "border-rim bg-surface text-ink hover:border-rim-strong hover:bg-canvas",
-    !readOnly ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30" : "",
+      ? "border-ink bg-sun text-ink"
+      : readOnly
+        ? "border-rim bg-surface text-ink"
+        : "border-rim bg-surface text-ink-muted hover:border-ink hover:text-ink",
+    !readOnly ? "cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun" : "",
   ]
     .filter(Boolean)
     .join(" ");
