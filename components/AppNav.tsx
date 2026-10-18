@@ -4,33 +4,33 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
-  { label: "Home", href: "/" },
+  { label: "Expenses", href: "/" },
   { label: "People", href: "/people" },
   { label: "Tags", href: "/tags" },
-  { label: "New expense", href: "/expenses/new" },
 ] as const;
 
 export default function AppNav() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 bg-surface border-b border-rim">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-6">
+    <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-ink">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3 sm:gap-6">
         {/* Wordmark */}
         <Link
           href="/"
-          className="font-display italic text-xl font-semibold text-ink shrink-0 tracking-tight"
+          className="font-display text-[28px] uppercase text-ink shrink-0"
           aria-label="Splitr home"
         >
           Splitr
         </Link>
 
-        {/* Nav links */}
-        <nav className="flex items-center gap-0.5 flex-1 min-w-0" aria-label="Main navigation">
+        {/* Sections */}
+        <nav className="flex items-center gap-1 flex-1 min-w-0" aria-label="Main navigation">
           {NAV_LINKS.map(({ label, href }) => {
             const active =
               href === "/"
-                ? pathname === "/"
+                ? pathname === "/" ||
+                  (pathname.startsWith("/expenses/") && !pathname.startsWith("/expenses/new"))
                 : pathname === href || pathname.startsWith(href + "/");
 
             return (
@@ -38,10 +38,10 @@ export default function AppNav() {
                 key={href}
                 href={href}
                 className={[
-                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                  "px-3 h-8 inline-flex items-center rounded-full text-sm font-semibold transition-colors whitespace-nowrap border",
                   active
-                    ? "bg-accent-dim text-accent font-semibold"
-                    : "text-ink-muted hover:text-ink hover:bg-canvas",
+                    ? "bg-sun border-ink text-ink"
+                    : "border-transparent text-ink-muted hover:text-ink hover:bg-mist",
                 ].join(" ")}
                 aria-current={active ? "page" : undefined}
               >
@@ -50,6 +50,15 @@ export default function AppNav() {
             );
           })}
         </nav>
+
+        {/* Primary action */}
+        <Link
+          href="/expenses/new"
+          className="shrink-0 inline-flex items-center gap-1 h-9 px-4 rounded-full bg-ink text-white text-sm font-semibold hover:bg-accent-hover transition-colors"
+        >
+          <span aria-hidden="true" className="text-base leading-none">+</span>
+          New
+        </Link>
       </div>
     </header>
   );
