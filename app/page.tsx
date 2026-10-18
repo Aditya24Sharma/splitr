@@ -62,6 +62,32 @@ function monthLabel(day: string): string {
   return localDate(day).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+// Filters, the open panel, and ticks survive opening an expense and coming
+// back. sessionStorage lasts as long as the browser tab.
+const HOME_STATE_KEY = "splitr.home";
+
+interface SavedHomeState {
+  filters: ExpenseFilters;
+  filtersOpen: boolean;
+  selectedIds: string[];
+}
+
+function readHomeState(): SavedHomeState | null {
+  try {
+    const raw = sessionStorage.getItem(HOME_STATE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<SavedHomeState>;
+    return {
+      // Spread over the defaults so a state saved by an older version still works
+      filters: { ...NO_FILTERS, ...saved.filters },
+      filtersOpen: saved.filtersOpen === true,
+      selectedIds: Array.isArray(saved.selectedIds) ? saved.selectedIds : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** A round tick box; a real button so it works with the keyboard */
 function Tick({
   checked,
@@ -262,6 +288,12 @@ export default function HomePage() {
         setExpenses(exp);
         setPeople(ppl);
         setTagList(tgs.map((t) => t.name));
+        const saved = readHomeState();
+        if (saved) {
+          setFilters(saved.filters);
+          setFiltersOpen(saved.filtersOpen);
+          setSelectedIds(new Set(saved.selectedIds));
+        }
         setLoadState("ready");
       })
       .catch((err) => {
@@ -271,6 +303,17 @@ export default function HomePage() {
         setLoadState("error");
       });
   }, []);
+
+  // Save only once loaded, so the defaults never overwrite what was restored
+  useEffect(() => {
+    if (loadState !== "ready") return;
+    const state: SavedHomeState = { filters, filtersOpen, selectedIds: [...selectedIds] };
+    try {
+      sessionStorage.setItem(HOME_STATE_KEY, JSON.stringify(state));
+    } catch {
+      // Storage full or disabled; remembering is a nicety, so ignore
+    }
+  }, [loadState, filters, filtersOpen, selectedIds]);
 
   // ---------------------------------------------------------------------------
   // Render
