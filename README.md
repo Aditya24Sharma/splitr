@@ -10,40 +10,46 @@ Access so only you can open it. Single user, no accounts.
 
 ---
 
+## How it's built
+
+- **`src/`** — the React app (Vite + TanStack Router). It builds to static
+  files that Cloudflare serves directly, without running any code.
+- **`worker/`** — the API (Hono), the only code that runs on Cloudflare.
+  Every route is under `/api`; `wrangler.jsonc` sends only those to the Worker.
+- **`worker/db/schema.ts`** — the D1 tables, described for Drizzle.
+- **`lib/`** — shared logic with no framework in it: the split math, money,
+  spending summaries, input validation. Covered by `npm test`.
+
+---
+
 ## Develop locally
 
 Requires Node.js 22+.
 
 ```bash
 npm install
-cp .env.example .env.local    # add your Plaid keys
+cp .env.example .dev.vars     # add your Plaid keys
 npm run db:migrate:local      # create the tables in a local D1 copy (.wrangler/)
-npm run dev                   # http://localhost:3000
+npm run dev                   # http://localhost:5173
 ```
 
-`next dev` gets the same `DB` binding as production from a local D1 database,
-via `initOpenNextCloudflareForDev()` in `next.config.ts`.
-
-To run the real Workers build locally (the same runtime as production), put
-the same keys in `.dev.vars` and run:
-
-```bash
-npm run preview               # http://localhost:8787
-```
+`npm run dev` runs the React app and the API together, with the API inside
+Cloudflare's runtime and a local D1 database. To try the production build
+locally, run `npm run preview`.
 
 ### Changing the database
 
-D1 has no `prisma db push`. Edit `prisma/schema.prisma`, then write a migration:
+Write the change as SQL, then describe it in `worker/db/schema.ts`:
 
 ```bash
-npx prisma migrate diff --from-local-d1 --to-schema prisma/schema.prisma --script \
-  > prisma/migrations/000N_what_changed.sql
+npx wrangler d1 migrations create splitr what_changed   # new file in migrations/
 npm run db:migrate:local
-npx wrangler d1 migrations apply splitr --remote   # when deploying
+npx wrangler d1 migrations apply splitr --remote        # when deploying
 ```
 
-D1 has no transactions: Prisma's `$transaction` runs its steps one by one.
-Writes that must be all-or-nothing use a D1 batch (`lib/expense-write.ts`).
+D1 has no transactions. Writes that must be all-or-nothing go in one
+`db.batch([...])`, which D1 runs as a single unit (see `worker/routes/expenses.ts`
+and `worker/sync.ts`).
 
 ---
 
@@ -89,5 +95,5 @@ npm test
 
 ## Tech stack
 
-Next.js 16 · TypeScript · Tailwind CSS v4 · Prisma 7 + Cloudflare D1 ·
-OpenNext for Cloudflare · Plaid (called with fetch) · Vitest
+React 19 · Vite · TanStack Router · Tailwind CSS v4 · Hono · Drizzle ORM +
+Cloudflare D1 · Plaid (called with fetch) · Vitest
