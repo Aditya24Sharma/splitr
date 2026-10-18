@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { PlaidConfigError, plaid } from '@/lib/plaid'
 
 // ---------------------------------------------------------------------------
@@ -7,6 +7,7 @@ import { PlaidConfigError, plaid } from '@/lib/plaid'
 // accounts and transactions. Splits made from them stay, unlinked.
 // ---------------------------------------------------------------------------
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
+  const prisma = getDb()
   const id = Number((await params).itemId)
   if (!Number.isInteger(id)) return NextResponse.json({ error: 'Invalid item id' }, { status: 400 })
 

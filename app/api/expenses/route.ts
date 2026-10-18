@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getD1, getDb } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
-import { connectTags, unknownTags } from '@/lib/tags'
-import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
+import { tagIds, unknownTags } from '@/lib/tags'
+import { parseExpenseInput } from '@/lib/expense-input'
+import { createExpense } from '@/lib/expense-write'
 
 // ---------------------------------------------------------------------------
 // POST /api/expenses
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
+  const prisma = getDb()
   let body: unknown
   try {
     body = await req.json()
@@ -41,19 +43,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const expense = await prisma.$transaction(async (tx) => {
-    const exp = await tx.expense.create({
-      data: {
-        ...expenseFields(input),
-        tags: { connect: connectTags(input.tags) },
-        ...(transactionId !== undefined && { transactionId: transactionId as number }),
-      },
-    })
-    await createExpenseChildren(tx, exp.id, input)
-    return tx.expense.findUniqueOrThrow({
-      where: { id: exp.id },
-      include: { items: { include: { assignments: true } }, participants: true },
-    })
+  const id = await createExpense(
+    getD1(),
+    input,
+    await tagIds(prisma, input.tags),
+    transactionId as number | undefined,
+  )
+  const expense = await prisma.expense.findUniqueOrThrow({
+    where: { id },
+    include: { items: { include: { assignments: true } }, participants: true },
   })
 
   return NextResponse.json({ id: expense.id, breakdown: computeBreakdown(expense) }, { status: 201 })
@@ -63,6 +61,7 @@ export async function POST(req: NextRequest) {
 // GET /api/expenses
 // ---------------------------------------------------------------------------
 export async function GET() {
+  const prisma = getDb()
   const expenses = await prisma.expense.findMany({
     orderBy: { createdAt: 'desc' },
     include: {

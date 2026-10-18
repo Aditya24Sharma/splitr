@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { PlaidApiError, plaid, type PlaidAccount, type PlaidTransaction } from '@/lib/plaid'
 import { toCents } from '@/lib/money'
 import { todayLocal } from '@/lib/spending'
@@ -41,6 +41,7 @@ function txFields(tx: PlaidTransaction, accountId: number) {
 }
 
 export async function syncItem(itemDbId: number): Promise<SyncResult> {
+  const prisma = getDb()
   const item = await prisma.plaidItem.findUnique({ where: { id: itemDbId } })
   if (!item) throw new Error(`Plaid item ${itemDbId} not found`)
 
@@ -134,6 +135,7 @@ export async function syncItem(itemDbId: number): Promise<SyncResult> {
 }
 
 export async function syncAllItems(): Promise<SyncResult[]> {
+  const prisma = getDb()
   const items = await prisma.plaidItem.findMany({ select: { id: true } })
   const results: SyncResult[] = []
   for (const item of items) results.push(await syncItem(item.id))

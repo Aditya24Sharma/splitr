@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/db'
+import { getD1, getDb } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
-import { parseTags, connectTags, unknownTags } from '@/lib/tags'
-import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
+import { parseTags, connectTags, tagIds, unknownTags } from '@/lib/tags'
+import { parseExpenseInput } from '@/lib/expense-input'
+import { replaceExpense } from '@/lib/expense-write'
 
 // ---------------------------------------------------------------------------
 // GET /api/expenses/[id]
@@ -12,6 +13,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   const expense = await prisma.expense.findUnique({
@@ -65,6 +67,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   let body: any
@@ -124,6 +127,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   let body: unknown
@@ -151,22 +155,10 @@ export async function PUT(
     return NextResponse.json({ error: 'expense type cannot be changed' }, { status: 400 })
   }
 
-  const expense = await prisma.$transaction(async (tx) => {
-    await tx.item.deleteMany({ where: { expenseId: id } }) // assignments cascade
-    await tx.expenseParticipant.deleteMany({ where: { expenseId: id } })
-    await tx.expense.update({
-      where: { id },
-      data: {
-        ...expenseFields(input),
-        loggedToSplitwise: false,
-        tags: { set: connectTags(input.tags) },
-      },
-    })
-    await createExpenseChildren(tx, id, input)
-    return tx.expense.findUniqueOrThrow({
-      where: { id },
-      include: { items: { include: { assignments: true } }, participants: true },
-    })
+  await replaceExpense(getD1(), id, input, await tagIds(prisma, input.tags))
+  const expense = await prisma.expense.findUniqueOrThrow({
+    where: { id },
+    include: { items: { include: { assignments: true } }, participants: true },
   })
 
   return NextResponse.json({ id: expense.id, breakdown: computeBreakdown(expense) })
@@ -179,6 +171,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   try {

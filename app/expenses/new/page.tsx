@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { formatUSD } from "@/lib/money";
 
 const SPLIT_CHOICES = [
@@ -29,6 +29,7 @@ export default async function NewExpensePage({
 }: {
   searchParams: Promise<{ fromTx?: string }>;
 }) {
+  const prisma = getDb();
   // ?fromTx=<id> splits a charge that's already in Money
   const { fromTx } = await searchParams;
   const txId = Number(fromTx);

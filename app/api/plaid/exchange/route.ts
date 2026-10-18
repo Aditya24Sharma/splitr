@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { PlaidConfigError, plaid } from '@/lib/plaid'
 import { accountFields } from '@/lib/sync'
 
 export async function POST(req: NextRequest) {
+  const prisma = getDb()
   let body: { public_token?: string }
   try {
     body = await req.json()

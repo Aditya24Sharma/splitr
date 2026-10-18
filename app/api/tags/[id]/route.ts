@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { normalizeTag } from '@/lib/tags'
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   let body: unknown
@@ -51,6 +52,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   try {

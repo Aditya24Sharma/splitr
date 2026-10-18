@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   let body: any
@@ -35,11 +36,10 @@ export async function PATCH(
   }
 
   try {
-    const person = await prisma.$transaction(async (tx) => {
-      // Only one person can be you
-      if (isMe === true) await tx.person.updateMany({ where: { id: { not: id } }, data: { isMe: false } })
-      return tx.person.update({ where: { id }, data })
-    })
+    // Update this person first, so a bad id fails before anyone else changes
+    const person = await prisma.person.update({ where: { id }, data })
+    // Only one person can be you
+    if (isMe === true) await prisma.person.updateMany({ where: { id: { not: id } }, data: { isMe: false } })
     return NextResponse.json(person)
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
@@ -53,6 +53,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const prisma = getDb()
   const { id } = await params
 
   try {

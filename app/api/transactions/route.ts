@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { TX_INCLUDE, txView } from '@/lib/transactions'
 import { parseManualTx } from '@/lib/manual-tx'
 
@@ -7,6 +7,7 @@ import { parseManualTx } from '@/lib/manual-tx'
 // GET /api/transactions — every transaction, newest first
 // ---------------------------------------------------------------------------
 export async function GET() {
+  const prisma = getDb()
   const rows = await prisma.transaction.findMany({
     orderBy: [{ date: 'desc' }, { id: 'desc' }],
     include: TX_INCLUDE,
@@ -18,6 +19,7 @@ export async function GET() {
 // POST /api/transactions — add an expense by hand (cash, Venmo, etc.)
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
+  const prisma = getDb()
   let body: unknown
   try {
     body = await req.json()

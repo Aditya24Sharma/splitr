@@ -39,8 +39,8 @@ export function PlaidLinkButton({
     }
     let cancelled = false;
     fetch("/api/plaid/link-token", { method: "POST" })
-      .then((r) => r.json())
-      .then((d: { link_token?: string; error?: string }) => {
+      .then((r) => r.json() as Promise<{ link_token?: string; error?: string }>)
+      .then((d) => {
         if (cancelled) return;
         if (d.link_token) {
           setLinkToken(d.link_token);

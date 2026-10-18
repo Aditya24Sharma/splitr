@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { isPlaidConfigured } from '@/lib/plaid'
 
 // ---------------------------------------------------------------------------
@@ -7,6 +7,7 @@ import { isPlaidConfigured } from '@/lib/plaid'
 // tokens and sync cursors, which must never reach the browser.
 // ---------------------------------------------------------------------------
 export async function GET() {
+  const prisma = getDb()
   const items = await prisma.plaidItem.findMany({
     orderBy: { createdAt: 'asc' },
     select: {

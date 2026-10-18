@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { TX_INCLUDE, txView } from '@/lib/transactions'
 import { parseManualTx } from '@/lib/manual-tx'
 
 async function findTx(rawId: string) {
+  const prisma = getDb()
   const id = Number(rawId)
   if (!Number.isInteger(id)) return null
   return prisma.transaction.findUnique({ where: { id }, include: TX_INCLUDE })
@@ -24,6 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 // Bank transactions are otherwise owned by Plaid and overwritten on sync.
 // ---------------------------------------------------------------------------
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const prisma = getDb()
   const tx = await findTx((await params).id)
   if (!tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
 
@@ -57,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/transactions/[id] — hand-added only; a split made from it stays
 // ---------------------------------------------------------------------------
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const prisma = getDb()
   const tx = await findTx((await params).id)
   if (!tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
   if (tx.source !== 'MANUAL') {
