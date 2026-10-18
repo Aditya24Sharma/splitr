@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Each section also owns the detail pages under these prefixes
 const NAV_LINKS = [
-  { label: "Expenses", href: "/" },
-  { label: "People", href: "/people" },
-  { label: "Tags", href: "/tags" },
+  { label: "Money", href: "/", owns: ["/transactions/"] },
+  { label: "Splits", href: "/splits", owns: ["/expenses/"] },
+  { label: "People", href: "/people", owns: [] },
+  { label: "Tags", href: "/tags", owns: [] },
+  { label: "Banks", href: "/accounts", owns: [] },
 ] as const;
 
 export default function AppNav() {
@@ -26,12 +29,11 @@ export default function AppNav() {
 
         {/* Sections */}
         <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto" aria-label="Main navigation">
-          {NAV_LINKS.map(({ label, href }) => {
+          {NAV_LINKS.map(({ label, href, owns }) => {
             const active =
-              href === "/"
-                ? pathname === "/" ||
-                  (pathname.startsWith("/expenses/") && !pathname.startsWith("/expenses/new"))
-                : pathname === href || pathname.startsWith(href + "/");
+              pathname === href ||
+              (href !== "/" && pathname.startsWith(href + "/")) ||
+              owns.some((prefix) => pathname.startsWith(prefix));
 
             return (
               <Link

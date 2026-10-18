@@ -25,6 +25,8 @@
   --color-sky: #DCEEFF;
   --color-mint: #55DB9C;
   --color-mint-dim: #DDF7EA;
+  /* Money in: mint is too light to read as text */
+  --color-income: #0A7A4B;
   --color-lavender: #E9CCFF;
 
   /* Destructive */
