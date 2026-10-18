@@ -29,12 +29,11 @@ export default async function NewExpensePage({
 }: {
   searchParams: Promise<{ fromTx?: string }>;
 }) {
-  const prisma = getDb();
   // ?fromTx=<id> splits a charge that's already in Money
   const { fromTx } = await searchParams;
   const txId = Number(fromTx);
   const tx = fromTx && Number.isInteger(txId)
-    ? await prisma.transaction.findUnique({
+    ? await getDb().transaction.findUnique({
         where: { id: txId },
         select: {
           id: true,
