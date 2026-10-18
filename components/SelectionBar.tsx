@@ -180,51 +180,67 @@ export function SelectionBar({
           </p>
         )}
 
-        {/* ── Action row ────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 px-3 py-3 flex-wrap">
-          <p className="pl-2 pr-1 mr-auto text-sm">
-            <span className="font-semibold">{count} selected</span>
-            <span className="text-ink/70"> · {formatUSD(totalCents)}</span>
-          </p>
-          <Button
-            variant={panel === "settle" ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => toggle("settle")}
-          >
-            Settle up
-          </Button>
-          <Button
-            variant={panel === "tag" ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => toggle("tag")}
-          >
-            Tag
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={pending}
-            onClick={() => run({ action: "set-logged", logged: !allLogged })}
-          >
-            {allLogged ? "Mark not logged" : "Mark logged"}
-          </Button>
-          <Button
-            variant={panel === "delete" ? "danger" : "secondary"}
-            size="sm"
-            onClick={() => toggle("delete")}
-          >
-            Delete
-          </Button>
-          <button
-            type="button"
-            onClick={onClear}
-            aria-label="Clear selection"
-            className="w-8 h-8 rounded-full inline-flex items-center justify-center text-lg leading-none hover:bg-ink hover:text-white transition-colors"
-          >
-            ×
-          </button>
+        {/* ── Action row: summary on top on phones, one line on desktop ── */}
+        <div className="px-3 py-3 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+          <div className="flex items-center justify-between sm:mr-auto">
+            <p className="pl-2 text-sm">
+              <span className="font-semibold">{count} selected</span>
+              <span className="text-ink/70"> · {formatUSD(totalCents)}</span>
+            </p>
+            <ClearButton onClear={onClear} className="inline-flex sm:hidden" />
+          </div>
+          <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2">
+            <Button
+              variant={panel === "settle" ? "primary" : "secondary"}
+              size="sm"
+              className="px-2 sm:px-3.5"
+              onClick={() => toggle("settle")}
+            >
+              Settle<span className="hidden sm:inline">&nbsp;up</span>
+            </Button>
+            <Button
+              variant={panel === "tag" ? "primary" : "secondary"}
+              size="sm"
+              className="px-2 sm:px-3.5"
+              onClick={() => toggle("tag")}
+            >
+              Tag
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="px-2 sm:px-3.5"
+              disabled={pending}
+              onClick={() => run({ action: "set-logged", logged: !allLogged })}
+            >
+              <span className="sm:hidden">{allLogged ? "Unlog" : "Log"}</span>
+              <span className="hidden sm:inline">{allLogged ? "Mark not logged" : "Mark logged"}</span>
+            </Button>
+            <Button
+              variant={panel === "delete" ? "danger" : "secondary"}
+              size="sm"
+              className="px-2 sm:px-3.5"
+              onClick={() => toggle("delete")}
+            >
+              Delete
+            </Button>
+          </div>
+          <ClearButton onClear={onClear} className="hidden sm:inline-flex" />
         </div>
       </div>
     </div>
+  );
+}
+
+function ClearButton({ onClear, className }: { onClear: () => void; className: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      aria-label="Clear selection"
+      className={`${className} w-8 h-8 shrink-0 rounded-full items-center justify-center text-lg leading-none hover:bg-ink hover:text-white transition-colors`}
+    >
+      ×
+    </button>
   );
 }
