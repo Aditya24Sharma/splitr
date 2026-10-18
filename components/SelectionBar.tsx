@@ -1,0 +1,230 @@
+"use client";
+
+/**
+ * SelectionBar — sticks to the bottom of the screen while expenses are ticked.
+ * One row of actions; "Settle up" and "Tag" open a panel above that row.
+ */
+
+import { useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { formatUSD } from "@/lib/money";
+import type { Debt } from "@/lib/settle";
+
+interface SelectedExpense {
+  id: string;
+  totalCents: number;
+  loggedToSplitwise: boolean;
+  tags: string[];
+}
+
+interface SelectionBarProps {
+  selected: SelectedExpense[];
+  debts: Debt[];
+  tagList: string[];
+  personName: (id: string) => string;
+  /** Runs a POST /api/expenses/bulk action; rejects with a readable error */
+  onBulk: (action: Record<string, unknown>) => Promise<void>;
+  onClear: () => void;
+}
+
+type Panel = "none" | "settle" | "tag" | "delete";
+
+export function SelectionBar({
+  selected,
+  debts,
+  tagList,
+  personName,
+  onBulk,
+  onClear,
+}: SelectionBarProps) {
+  const [panel, setPanel] = useState<Panel>("none");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const count = selected.length;
+  const totalCents = selected.reduce((sum, e) => sum + e.totalCents, 0);
+  const allLogged = selected.every((e) => e.loggedToSplitwise);
+
+  function toggle(p: Panel) {
+    setPanel((cur) => (cur === p ? "none" : p));
+    setError(null);
+  }
+
+  async function run(action: Record<string, unknown>, closeAfter = false) {
+    setPending(true);
+    setError(null);
+    try {
+      await onBulk(action);
+      if (closeAfter) setPanel("none");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function copyDebts() {
+    const text = debts
+      .map((d) => `${personName(d.fromId)} owes ${personName(d.toId)} ${formatUSD(d.cents)}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard unavailable; nothing to do
+    }
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-3 sm:pb-5 pointer-events-none">
+      <div
+        className="rise pointer-events-auto mx-auto max-w-3xl rounded-3xl border border-ink bg-sun shadow-[0_8px_0_0_#0B0B0C]"
+        role="region"
+        aria-label="Selected expenses"
+      >
+        {/* ── Panel ─────────────────────────────────────────────────────── */}
+        {panel === "settle" && (
+          <div className="px-5 pt-5 pb-2">
+            {debts.length === 0 ? (
+              <p className="text-sm font-medium">Nobody owes anything here.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {debts.map((d) => (
+                  <li key={`${d.fromId}-${d.toId}`} className="flex items-baseline gap-3">
+                    <span className="flex-1 min-w-0 truncate text-sm">
+                      <span className="font-semibold">{personName(d.fromId)}</span>
+                      <span className="text-ink/60"> pays </span>
+                      <span className="font-semibold">{personName(d.toId)}</span>
+                    </span>
+                    <span className="font-display text-3xl tabular-nums">
+                      {formatUSD(d.cents)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {debts.length > 0 && (
+              <button
+                type="button"
+                onClick={copyDebts}
+                className="mt-3 text-sm font-semibold underline underline-offset-4"
+              >
+                {copied ? "Copied" : "Copy for Splitwise"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {panel === "tag" && (
+          <div className="px-5 pt-5 pb-2">
+            {tagList.length === 0 ? (
+              <p className="text-sm">
+                No tags yet.{" "}
+                <Link href="/tags" className="font-semibold underline underline-offset-4">
+                  Create tags
+                </Link>
+              </p>
+            ) : (
+              <>
+                <p className="text-xs font-medium text-ink/70 mb-2">
+                  Filled = on every selected expense. Click to add or remove.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {tagList.map((tag) => {
+                    const onAll = selected.every((e) => e.tags.includes(tag));
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => run({ action: onAll ? "remove-tag" : "add-tag", tag })}
+                        aria-pressed={onAll}
+                        className={[
+                          "h-8 px-3 rounded-full border border-ink text-sm font-semibold transition-colors disabled:opacity-50",
+                          onAll ? "bg-ink text-white" : "bg-surface hover:bg-mist",
+                        ].join(" ")}
+                      >
+                        {onAll ? "✓ " : "+ "}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {panel === "delete" && (
+          <div className="px-5 pt-5 pb-2 flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold flex-1 min-w-40">
+              Delete {count} expense{count === 1 ? "" : "s"}? This can&apos;t be undone.
+            </p>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={pending}
+              onClick={() => run({ action: "delete" }, true)}
+            >
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        )}
+
+        {error && (
+          <p className="px-5 pt-3 text-sm font-semibold text-danger" role="alert">
+            {error}
+          </p>
+        )}
+
+        {/* ── Action row ────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 px-3 py-3 flex-wrap">
+          <p className="pl-2 pr-1 mr-auto text-sm">
+            <span className="font-semibold">{count} selected</span>
+            <span className="text-ink/70"> · {formatUSD(totalCents)}</span>
+          </p>
+          <Button
+            variant={panel === "settle" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => toggle("settle")}
+          >
+            Settle up
+          </Button>
+          <Button
+            variant={panel === "tag" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => toggle("tag")}
+          >
+            Tag
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={pending}
+            onClick={() => run({ action: "set-logged", logged: !allLogged })}
+          >
+            {allLogged ? "Mark not logged" : "Mark logged"}
+          </Button>
+          <Button
+            variant={panel === "delete" ? "danger" : "secondary"}
+            size="sm"
+            onClick={() => toggle("delete")}
+          >
+            Delete
+          </Button>
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Clear selection"
+            className="w-8 h-8 rounded-full inline-flex items-center justify-center text-lg leading-none hover:bg-ink hover:text-white transition-colors"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

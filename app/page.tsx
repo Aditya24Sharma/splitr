@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { SelectionBar } from "@/components/SelectionBar";
 import { formatUSD } from "@/lib/money";
 import { settleExpenses } from "@/lib/settle";
 import {
@@ -49,18 +49,48 @@ interface ExpenseListItem {
 // ---------------------------------------------------------------------------
 
 /** day is YYYY-MM-DD; read as a local date so it never shifts a day */
-function formatDate(day: string): string {
-  const d = new Date(`${day}T00:00`);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year:
-      d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
-  });
+function localDate(day: string): Date {
+  return new Date(`${day}T00:00`);
+}
+
+function shortDate(day: string): string {
+  return localDate(day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function monthLabel(day: string): string {
+  return localDate(day).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
 const SELECT_CLASS =
-  "w-full px-2 h-9 text-sm bg-surface text-ink rounded-lg border border-rim focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent";
+  "w-full px-4 h-10 text-sm bg-surface text-ink rounded-full border border-ink focus:outline-none focus:ring-4 focus:ring-sun/70";
+
+/** A round tick box; a real button so it works with the keyboard */
+function Tick({
+  checked,
+  onToggle,
+  label,
+}: {
+  checked: boolean | "mixed";
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onToggle}
+      className={[
+        "w-6 h-6 shrink-0 rounded-full border border-ink inline-flex items-center justify-center text-xs font-bold transition-colors",
+        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
+        checked ? "bg-ink text-white" : "bg-surface text-transparent hover:bg-sun",
+      ].join(" ")}
+    >
+      {checked === "mixed" ? "–" : "✓"}
+    </button>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -75,14 +105,9 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
-  // Every tag on the Tags page (for bulk add/remove), not just ones in use
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Every tag on the Tags page (for bulk tagging), not just ones in use
   const [tagList, setTagList] = useState<string[]>([]);
-
-  // Bulk actions on ticked expenses
-  const [bulkTag, setBulkTag] = useState("");
-  const [bulkPending, setBulkPending] = useState(false);
-  const [bulkError, setBulkError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -97,8 +122,7 @@ export default function HomePage() {
     () => filterExpenses(expenses, filters),
     [expenses, filters]
   );
-  const filtersActive = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
-  // Only ticked expenses that are currently shown count toward the summary
+  // Only ticked expenses that are currently shown count toward the bar
   const selectedExpenses = useMemo(
     () => visible.map((m) => m.expense).filter((e) => selectedIds.has(e.id)),
     [visible, selectedIds]
@@ -113,10 +137,58 @@ export default function HomePage() {
       ),
     [selectedExpenses]
   );
-  const selectedTotalCents = selectedExpenses.reduce(
-    (sum, e) => sum + e.totalCents,
-    0
-  );
+
+  const totalCents = expenses.reduce((sum, e) => sum + e.totalCents, 0);
+  const notLogged = expenses.filter((e) => !e.loggedToSplitwise).length;
+
+  // Visible expenses grouped under month headings (already newest first)
+  const groups = useMemo(() => {
+    const out: { month: string; rows: typeof visible }[] = [];
+    for (const m of visible) {
+      const month = monthLabel(expenseDay(m.expense));
+      if (out.at(-1)?.month !== month) out.push({ month, rows: [] });
+      out.at(-1)!.rows.push(m);
+    }
+    return out;
+  }, [visible]);
+
+  const allVisibleSelected =
+    visible.length > 0 && selectedExpenses.length === visible.length;
+
+  // Removable pills describing the active filters (search lives in its box)
+  const activePills: { key: string; label: string; clear: () => void }[] = [];
+  if (filters.from || filters.to) {
+    activePills.push({
+      key: "dates",
+      label: `${filters.from ? shortDate(filters.from) : "Start"} – ${filters.to ? shortDate(filters.to) : "now"}`,
+      clear: () => setFilters((f) => ({ ...f, from: "", to: "" })),
+    });
+  }
+  if (filters.personId) {
+    activePills.push({
+      key: "person",
+      label: `With ${personName(filters.personId)}`,
+      clear: () => setFilter("personId", ""),
+    });
+  }
+  if (filters.payerId) {
+    activePills.push({
+      key: "payer",
+      label: `Paid by ${personName(filters.payerId)}`,
+      clear: () => setFilter("payerId", ""),
+    });
+  }
+  if (filters.logged !== "all") {
+    activePills.push({
+      key: "logged",
+      label: filters.logged === "logged" ? "Logged" : "Not logged",
+      clear: () => setFilter("logged", "all"),
+    });
+  }
+  for (const tag of filters.tags) {
+    activePills.push({ key: `tag-${tag}`, label: `#${tag}`, clear: () => toggleFilterTag(tag) });
+  }
+  const filterCount = activePills.length;
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
@@ -127,52 +199,48 @@ export default function HomePage() {
     });
   }
 
+  function toggleSelectAll() {
+    setSelectedIds(
+      allVisibleSelected ? new Set() : new Set(visible.map((m) => m.expense.id))
+    );
+  }
+
   function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
   function toggleFilterTag(tag: string) {
-    setFilter(
-      "tags",
-      filters.tags.includes(tag)
-        ? filters.tags.filter((t) => t !== tag)
-        : [...filters.tags, tag]
-    );
+    setFilters((prev) => ({
+      ...prev,
+      tags: prev.tags.includes(tag)
+        ? prev.tags.filter((t) => t !== tag)
+        : [...prev.tags, tag],
+    }));
   }
 
+  /** Runs a bulk action on the ticked expenses, then reloads the list */
   async function runBulk(action: Record<string, unknown>) {
-    setBulkPending(true);
-    setBulkError(null);
-    try {
-      const ids = selectedExpenses.map((e) => e.id);
-      const res = await fetch("/api/expenses/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, ...action }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? `Error ${res.status}`);
-      }
-      if (action.action === "delete") setSelectedIds(new Set());
-      const listRes = await fetch("/api/expenses");
-      if (listRes.ok) setExpenses((await listRes.json()) as ExpenseListItem[]);
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setBulkPending(false);
-      setConfirmDelete(false);
+    const ids = selectedExpenses.map((e) => e.id);
+    const res = await fetch("/api/expenses/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, ...action }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Error ${res.status}`);
     }
+    if (action.action === "delete") setSelectedIds(new Set());
+    const listRes = await fetch("/api/expenses");
+    if (listRes.ok) setExpenses((await listRes.json()) as ExpenseListItem[]);
   }
 
   function personName(id: string): string {
     return personById.get(id)?.name ?? id.slice(0, 6);
   }
 
+  // loadState starts as "loading", so the effect only has to settle it
   useEffect(() => {
-    setLoadState("loading");
-    setLoadError(null);
-
     Promise.all([
       fetch("/api/expenses").then((r) => {
         if (!r.ok) throw new Error(`Failed to load expenses (HTTP ${r.status})`);
@@ -208,51 +276,38 @@ export default function HomePage() {
   return (
     <div className="space-y-8">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">
-            Expenses
-          </h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            A record of shared spending — newest first.
+      <header>
+        <h1 className="font-display text-6xl sm:text-7xl uppercase">Expenses</h1>
+        {loadState === "ready" && expenses.length > 0 && (
+          <p className="mt-3 text-sm text-ink-muted">
+            {expenses.length} expense{expenses.length === 1 ? "" : "s"} ·{" "}
+            <span className="text-ink font-semibold tabular-nums">{formatUSD(totalCents)}</span>
+            {notLogged > 0 && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => setFilter("logged", "not-logged")}
+                  className="underline underline-offset-4 hover:text-ink"
+                >
+                  {notLogged} not in Splitwise yet
+                </button>
+              </>
+            )}
           </p>
-        </div>
+        )}
+      </header>
 
-        {/* New expense affordance */}
-        <div className="flex items-center gap-2 shrink-0">
-          <Link href="/expenses/new/itemized">
-            <Button variant="secondary" size="sm">
-              Itemized
-            </Button>
-          </Link>
-          <Link href="/expenses/new/simple">
-            <Button variant="primary" size="sm">
-              Simple split
-            </Button>
-          </Link>
-        </div>
-      </div>
+      {/* ── Loading / error ─────────────────────────────────────────────── */}
+      {loadState === "loading" && <p className="text-sm text-ink-faint">Loading…</p>}
 
-      {/* ── Loading ─────────────────────────────────────────────────────── */}
-      {loadState === "loading" && (
-        <p className="text-sm text-ink-faint">Loading…</p>
-      )}
-
-      {/* ── Error ───────────────────────────────────────────────────────── */}
       {loadState === "error" && (
         <div
-          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           <span className="flex-1">{loadError}</span>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => {
-              setLoadState("loading");
-              window.location.reload();
-            }}
-          >
+          <Button variant="danger" size="sm" onClick={() => window.location.reload()}>
             Retry
           </Button>
         </div>
@@ -260,371 +315,294 @@ export default function HomePage() {
 
       {/* ── Empty state ─────────────────────────────────────────────────── */}
       {loadState === "ready" && expenses.length === 0 && (
-        <Card padding="lg">
-          <div className="text-center space-y-4 py-4">
-            <p className="text-sm text-ink-muted">No expenses yet.</p>
-            <div className="flex justify-center gap-3">
-              <Link href="/expenses/new/simple">
-                <Button variant="primary">New simple split</Button>
-              </Link>
-              <Link href="/expenses/new/itemized">
-                <Button variant="secondary">New itemized</Button>
-              </Link>
-            </div>
-          </div>
-        </Card>
+        <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
+          <p className="font-display text-4xl uppercase">Nothing to split yet</p>
+          <p className="mt-3 text-sm text-ink-muted">
+            Add a quick split or scan a receipt to get started.
+          </p>
+          <Link href="/expenses/new" className="inline-block mt-6">
+            <Button variant="primary">+ New expense</Button>
+          </Link>
+        </div>
       )}
 
       {/* ── Search + filters ────────────────────────────────────────────── */}
       {loadState === "ready" && expenses.length > 0 && (
-        <div className="space-y-3">
-          <Input
-            type="search"
-            value={filters.query}
-            onChange={(e) => setFilter("query", e.target.value)}
-            placeholder="Search expenses or items, e.g. gas or milk"
-            aria-label="Search expenses and items by name"
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              From
+        <section className="space-y-3" aria-label="Search and filter">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="8.5" cy="8.5" r="5.5" />
+                <path d="M13 13l4 4" strokeLinecap="round" />
+              </svg>
               <Input
-                type="date"
-                value={filters.from}
-                onChange={(e) => setFilter("from", e.target.value)}
+                type="search"
+                value={filters.query}
+                onChange={(e) => setFilter("query", e.target.value)}
+                placeholder="Search expenses or items"
+                aria-label="Search expenses and items by name"
+                className="pl-10"
               />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              To
-              <Input
-                type="date"
-                value={filters.to}
-                onChange={(e) => setFilter("to", e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              Person
-              <select
-                value={filters.personId}
-                onChange={(e) => setFilter("personId", e.target.value)}
-                className={SELECT_CLASS}
-              >
-                <option value="">Anyone</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              Paid by
-              <select
-                value={filters.payerId}
-                onChange={(e) => setFilter("payerId", e.target.value)}
-                className={SELECT_CLASS}
-              >
-                <option value="">Anyone</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              Splitwise
-              <select
-                value={filters.logged}
-                onChange={(e) =>
-                  setFilter("logged", e.target.value as ExpenseFilters["logged"])
-                }
-                className={SELECT_CLASS}
-              >
-                <option value="all">All</option>
-                <option value="not-logged">Not logged</option>
-                <option value="logged">Logged</option>
-              </select>
-            </label>
+            </div>
+            <Button
+              variant={filtersOpen ? "primary" : "secondary"}
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+            >
+              Filter{filterCount > 0 ? ` · ${filterCount}` : ""}
+            </Button>
           </div>
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-ink-muted mr-1">Tags:</span>
-              {allTags.map((tag) => {
-                const on = filters.tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleFilterTag(tag)}
-                    aria-pressed={on}
-                    className={[
-                      "px-2.5 py-0.5 text-xs font-medium rounded-full border transition-colors",
-                      on
-                        ? "bg-accent text-white border-accent"
-                        : "bg-surface text-ink border-rim hover:border-rim-strong",
-                    ].join(" ")}
+
+          {filtersOpen && (
+            <div className="rise rounded-3xl border border-ink bg-mist p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                  From
+                  <Input
+                    type="date"
+                    value={filters.from}
+                    onChange={(e) => setFilter("from", e.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                  To
+                  <Input
+                    type="date"
+                    value={filters.to}
+                    onChange={(e) => setFilter("to", e.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                  Includes
+                  <select
+                    value={filters.personId}
+                    onChange={(e) => setFilter("personId", e.target.value)}
+                    className={SELECT_CLASS}
                   >
-                    {tag}
-                  </button>
-                );
-              })}
+                    <option value="">Anyone</option>
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-semibold">
+                  Paid by
+                  <select
+                    value={filters.payerId}
+                    onChange={(e) => setFilter("payerId", e.target.value)}
+                    className={SELECT_CLASS}
+                  >
+                    <option value="">Anyone</option>
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold">Splitwise</p>
+                <div className="flex gap-1.5">
+                  {(
+                    [
+                      ["all", "All"],
+                      ["not-logged", "Not logged"],
+                      ["logged", "Logged"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFilter("logged", value)}
+                      aria-pressed={filters.logged === value}
+                      className={[
+                        "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
+                        filters.logged === value ? "bg-ink text-white" : "bg-surface hover:bg-sun",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {allTags.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold">Tags (any)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allTags.map((tag) => {
+                      const on = filters.tags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleFilterTag(tag)}
+                          aria-pressed={on}
+                          className={[
+                            "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
+                            on ? "bg-ink text-white" : "bg-surface hover:bg-sun",
+                          ].join(" ")}
+                        >
+                          #{tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {filtersActive && (
-            <div className="flex items-center gap-3 text-xs text-ink-muted">
-              <span>
-                Showing {visible.length} of {expenses.length} expenses
-              </span>
+
+          {activePills.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {activePills.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={p.clear}
+                  className="h-8 pl-3.5 pr-2.5 rounded-full border border-ink bg-sun text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-surface transition-colors"
+                  aria-label={`Remove filter ${p.label}`}
+                >
+                  {p.label}
+                  <span aria-hidden="true" className="text-base leading-none">×</span>
+                </button>
+              ))}
               <button
                 type="button"
-                onClick={() => setFilters(NO_FILTERS)}
-                className="hover:text-ink underline"
+                onClick={() => setFilters((f) => ({ ...NO_FILTERS, query: f.query }))}
+                className="h-8 px-2 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
               >
-                Clear filters
+                Clear all
               </button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── Selection summary ───────────────────────────────────────────── */}
-      {loadState === "ready" && expenses.length > 0 && (
-        <Card padding="md">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-sm text-ink">
-              {selectedExpenses.length === 0
-                ? "Select expenses to see who owes whom."
-                : `Selected: ${selectedExpenses.length} expense${
-                    selectedExpenses.length === 1 ? "" : "s"
-                  } (${formatUSD(selectedTotalCents)})`}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  setSelectedIds(new Set(visible.map((m) => m.expense.id)))
-                }
-              >
-                Select all
-              </Button>
-              {selectedIds.size > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-          {selectedExpenses.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-rim space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  value={bulkTag}
-                  onChange={(e) => setBulkTag(e.target.value)}
-                  disabled={bulkPending}
-                  aria-label="Tag to add or remove"
-                  className={`${SELECT_CLASS} w-auto`}
-                >
-                  <option value="">Choose a tag…</option>
-                  {tagList.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!bulkTag || bulkPending}
-                  onClick={() => runBulk({ action: "add-tag", tag: bulkTag })}
-                >
-                  Add tag
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!bulkTag || bulkPending}
-                  onClick={() => runBulk({ action: "remove-tag", tag: bulkTag })}
-                >
-                  Remove tag
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={bulkPending}
-                  onClick={() => runBulk({ action: "set-logged", logged: true })}
-                >
-                  Mark logged
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={bulkPending}
-                  onClick={() => runBulk({ action: "set-logged", logged: false })}
-                >
-                  Mark not logged
-                </Button>
-                {confirmDelete ? (
-                  <>
-                    <span className="text-sm text-ink-muted">
-                      Delete {selectedExpenses.length} expense
-                      {selectedExpenses.length === 1 ? "" : "s"}? This can&apos;t be undone.
-                    </span>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      disabled={bulkPending}
-                      onClick={() => runBulk({ action: "delete" })}
-                    >
-                      {bulkPending ? "Deleting…" : "Delete"}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={bulkPending}
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </div>
-              {bulkError && (
-                <p className="text-xs text-danger" role="alert">
-                  {bulkError}
-                </p>
-              )}
-            </div>
-          )}
-          {selectedExpenses.length > 0 && (
-            <ul className="mt-3 space-y-1">
-              {debts.length === 0 ? (
-                <li className="text-sm text-ink-muted">Nobody owes anything.</li>
-              ) : (
-                debts.map((d) => (
-                  <li
-                    key={`${d.fromId}-${d.toId}`}
-                    className="flex justify-between gap-4 text-sm text-ink"
-                  >
-                    <span>
-                      {personName(d.fromId)}{" "}
-                      <span className="text-ink-muted">owes</span>{" "}
-                      {personName(d.toId)}
-                    </span>
-                    <span className="font-semibold tabular-nums">
-                      {formatUSD(d.cents)}
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
-          )}
-        </Card>
+        </section>
       )}
 
       {/* ── Expense list ────────────────────────────────────────────────── */}
       {loadState === "ready" && expenses.length > 0 && visible.length === 0 && (
-        <p className="text-sm text-ink-muted">No expenses match.</p>
+        <div className="rounded-3xl border border-dashed border-ink px-6 py-10 text-center">
+          <p className="font-display text-3xl uppercase">No matches</p>
+          <button
+            type="button"
+            onClick={() => setFilters(NO_FILTERS)}
+            className="mt-3 text-sm font-semibold underline underline-offset-4"
+          >
+            Clear search and filters
+          </button>
+        </div>
       )}
 
       {loadState === "ready" && visible.length > 0 && (
-        <div className="space-y-2">
-          {visible.map(({ expense: exp, matchedItems }) => {
-            const label = exp.store ?? exp.description ?? "Expense";
-            const payerName =
-              exp.payer?.name ?? personById.get(exp.payerId)?.name ?? "Unknown";
+        <section aria-label="Expenses">
+          <div className="flex items-center gap-3 px-4 pb-3">
+            <Tick
+              checked={allVisibleSelected ? true : selectedExpenses.length > 0 ? "mixed" : false}
+              onToggle={toggleSelectAll}
+              label={allVisibleSelected ? "Deselect all" : "Select all shown"}
+            />
+            <p className="text-sm text-ink-muted">
+              {allVisibleSelected ? "All selected" : "Select all"}
+              {filterCount > 0 || filters.query ? ` · ${visible.length} shown` : ""}
+            </p>
+          </div>
 
-            // Compact per-person glance
-            const perPersonGlance = exp.breakdown.perPerson
-              .map(({ personId, cents }) => {
-                const person =
-                  exp.payer?.id === personId
-                    ? exp.payer
-                    : personById.get(personId);
-                const name = person?.name ?? personId.slice(0, 6);
-                return `${name} ${formatUSD(cents)}`;
-              })
-              .join(" · ");
-
-            return (
-              <div key={exp.id} className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(exp.id)}
-                  onChange={() => toggleSelected(exp.id)}
-                  aria-label={`Select ${label}`}
-                  className="w-4 h-4 shrink-0 rounded border-rim accent-accent cursor-pointer"
-                />
-                <Link href={`/expenses/${exp.id}`} className="block flex-1 min-w-0">
-                  <Card
-                    padding="md"
-                    className="hover:border-rim-strong transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-start gap-3 min-w-0">
-                      {/* Left: date */}
-                      <div className="shrink-0 w-12 text-center">
-                        <p className="text-xs text-ink-faint tabular-nums">
-                          {formatDate(expenseDay(exp))}
-                        </p>
-                      </div>
-
-                      {/* Centre: label + glance */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-ink truncate">
-                          {label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-ink-muted truncate">
-                          Paid by {payerName}
-                          {perPersonGlance ? ` · ${perPersonGlance}` : ""}
-                        </p>
-                        {matchedItems.length > 0 && (
-                          <p className="mt-0.5 text-xs text-ink truncate">
-                            Items: {matchedItems.join(", ")}
-                          </p>
-                        )}
-                        {exp.tags.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {exp.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 text-[11px] font-medium text-ink-muted bg-canvas border border-rim rounded-full"
-                              >
-                                {tag}
-                              </span>
-                            ))}
+          <div className="space-y-6">
+            {groups.map(({ month, rows }) => (
+              <div key={month}>
+                <h2 className="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                  {month}
+                </h2>
+                <ul className="rounded-3xl border border-ink overflow-hidden divide-y divide-rim">
+                  {rows.map(({ expense: exp, matchedItems }, i) => {
+                    const label = exp.store || exp.description || "Expense";
+                    const payerName = exp.payer?.name ?? personName(exp.payerId);
+                    const day = localDate(expenseDay(exp));
+                    const selected = selectedIds.has(exp.id);
+                    return (
+                      <li
+                        key={exp.id}
+                        className={[
+                          "rise flex items-center gap-3 pl-4 pr-2 transition-colors",
+                          selected ? "bg-sun/40" : "bg-surface hover:bg-mist",
+                        ].join(" ")}
+                        style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
+                      >
+                        <Tick
+                          checked={selected}
+                          onToggle={() => toggleSelected(exp.id)}
+                          label={`Select ${label}`}
+                        />
+                        <Link
+                          href={`/expenses/${exp.id}`}
+                          className="flex-1 min-w-0 flex items-center gap-4 py-3.5 pr-3"
+                        >
+                          {/* Date */}
+                          <div className="w-10 shrink-0 text-center leading-none">
+                            <p className="font-display text-[26px] tabular-nums">{day.getDate()}</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase text-ink-muted">
+                              {day.toLocaleDateString("en-US", { month: "short" })}
+                            </p>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Right: total + logged */}
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-semibold text-ink tabular-nums">
-                          {formatUSD(exp.totalCents)}
-                        </p>
-                        {exp.loggedToSplitwise && (
-                          <p className="mt-0.5 text-xs font-medium text-ink-muted">
-                            Logged
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
+                          {/* Label + meta */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate">{label}</p>
+                            <p className="mt-0.5 text-sm text-ink-muted truncate">
+                              {payerName} paid
+                              {exp.breakdown.perPerson.length > 1 &&
+                                ` · split ${exp.breakdown.perPerson.length} ways`}
+                              {exp.tags.length > 0 && ` · ${exp.tags.map((t) => `#${t}`).join(" ")}`}
+                            </p>
+                            {matchedItems.length > 0 && (
+                              <p className="mt-0.5 text-sm truncate">
+                                <span className="bg-sun px-1 rounded">{matchedItems.join(", ")}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Amount + status */}
+                          <div className="shrink-0 text-right">
+                            <p className="font-semibold tabular-nums">{formatUSD(exp.totalCents)}</p>
+                            {exp.loggedToSplitwise && (
+                              <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-ink-muted">
+                                <span className="w-2 h-2 rounded-full bg-mint" aria-hidden="true" />
+                                Logged
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Selection bar ───────────────────────────────────────────────── */}
+      {selectedExpenses.length > 0 && (
+        <SelectionBar
+          selected={selectedExpenses}
+          debts={debts}
+          tagList={tagList}
+          personName={personName}
+          onBulk={runBulk}
+          onClear={() => setSelectedIds(new Set())}
+        />
       )}
     </div>
   );
