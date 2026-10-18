@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A coin split in two: Splitr's mark -->
+  <circle cx="32" cy="32" r="29" fill="#FFD731" stroke="#0B0B0C" stroke-width="4"/>
+  <path d="M32 3 A29 29 0 0 0 32 61 Z" fill="#0B0B0C"/>
+</svg>
