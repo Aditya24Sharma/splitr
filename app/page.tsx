@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatUSD } from "@/lib/money";
+import { settleExpenses } from "@/lib/settle";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,11 +59,44 @@ export default function HomePage() {
     "loading"
   );
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
     [people]
   );
+
+  const selectedExpenses = useMemo(
+    () => expenses.filter((e) => selectedIds.has(e.id)),
+    [expenses, selectedIds]
+  );
+  const debts = useMemo(
+    () =>
+      settleExpenses(
+        selectedExpenses.map((e) => ({
+          payerId: e.payerId,
+          perPerson: e.breakdown.perPerson,
+        }))
+      ),
+    [selectedExpenses]
+  );
+  const selectedTotalCents = selectedExpenses.reduce(
+    (sum, e) => sum + e.totalCents,
+    0
+  );
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function personName(id: string): string {
+    return personById.get(id)?.name ?? id.slice(0, 6);
+  }
 
   useEffect(() => {
     setLoadState("loading");
@@ -166,6 +200,62 @@ export default function HomePage() {
       )}
 
       {/* ── Expense list ────────────────────────────────────────────────── */}
+      {/* ── Selection summary ───────────────────────────────────────────── */}
+      {loadState === "ready" && expenses.length > 0 && (
+        <Card padding="md">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-ink">
+              {selectedExpenses.length === 0
+                ? "Select expenses to see who owes whom."
+                : `Selected: ${selectedExpenses.length} expense${
+                    selectedExpenses.length === 1 ? "" : "s"
+                  } (${formatUSD(selectedTotalCents)})`}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set(expenses.map((e) => e.id)))}
+              >
+                Select all
+              </Button>
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+          {selectedExpenses.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {debts.length === 0 ? (
+                <li className="text-sm text-ink-muted">Nobody owes anything.</li>
+              ) : (
+                debts.map((d) => (
+                  <li
+                    key={`${d.fromId}-${d.toId}`}
+                    className="flex justify-between gap-4 text-sm text-ink"
+                  >
+                    <span>
+                      {personName(d.fromId)}{" "}
+                      <span className="text-ink-muted">owes</span>{" "}
+                      {personName(d.toId)}
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      {formatUSD(d.cents)}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </Card>
+      )}
+
       {loadState === "ready" && expenses.length > 0 && (
         <div className="space-y-2">
           {expenses.map((exp) => {
@@ -186,44 +276,53 @@ export default function HomePage() {
               .join(" · ");
 
             return (
-              <Link key={exp.id} href={`/expenses/${exp.id}`} className="block">
-                <Card
-                  padding="md"
-                  className="hover:border-rim-strong transition-colors cursor-pointer"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    {/* Left: date */}
-                    <div className="shrink-0 w-12 text-center">
-                      <p className="text-xs text-ink-faint tabular-nums">
-                        {formatDate(exp.createdAt)}
-                      </p>
-                    </div>
-
-                    {/* Centre: label + glance */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-ink truncate">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-ink-muted truncate">
-                        Paid by {payerName}
-                        {perPersonGlance ? ` · ${perPersonGlance}` : ""}
-                      </p>
-                    </div>
-
-                    {/* Right: total + logged */}
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-ink tabular-nums">
-                        {formatUSD(exp.totalCents)}
-                      </p>
-                      {exp.loggedToSplitwise && (
-                        <p className="mt-0.5 text-xs font-medium text-ink-muted">
-                          Logged
+              <div key={exp.id} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(exp.id)}
+                  onChange={() => toggleSelected(exp.id)}
+                  aria-label={`Select ${label}`}
+                  className="w-4 h-4 shrink-0 rounded border-rim accent-accent cursor-pointer"
+                />
+                <Link href={`/expenses/${exp.id}`} className="block flex-1 min-w-0">
+                  <Card
+                    padding="md"
+                    className="hover:border-rim-strong transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      {/* Left: date */}
+                      <div className="shrink-0 w-12 text-center">
+                        <p className="text-xs text-ink-faint tabular-nums">
+                          {formatDate(exp.createdAt)}
                         </p>
-                      )}
+                      </div>
+
+                      {/* Centre: label + glance */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-ink truncate">
+                          {label}
+                        </p>
+                        <p className="mt-0.5 text-xs text-ink-muted truncate">
+                          Paid by {payerName}
+                          {perPersonGlance ? ` · ${perPersonGlance}` : ""}
+                        </p>
+                      </div>
+
+                      {/* Right: total + logged */}
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-ink tabular-nums">
+                          {formatUSD(exp.totalCents)}
+                        </p>
+                        {exp.loggedToSplitwise && (
+                          <p className="mt-0.5 text-xs font-medium text-ink-muted">
+                            Logged
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              </Link>
+                  </Card>
+                </Link>
+              </div>
             );
           })}
         </div>
