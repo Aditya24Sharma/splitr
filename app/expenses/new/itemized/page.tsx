@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
@@ -58,12 +58,56 @@ function parsedItemToRow(
   };
 }
 
+/** The parts of GET /api/expenses/[id] this form needs when editing */
+interface SavedExpense {
+  type: "ITEMIZED" | "SIMPLE";
+  store: string | null;
+  purchasedAt: string | null;
+  taxCents: number;
+  payerId: string;
+  tags: string[];
+  items: {
+    rawName: string | null;
+    name: string;
+    quantity: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+    assignments: { personId: string }[];
+  }[];
+}
+
+async function loadSavedExpense(id: string): Promise<SavedExpense> {
+  const r = await fetch(`/api/expenses/${id}`);
+  if (r.status === 404) throw new Error("Expense not found.");
+  if (!r.ok) throw new Error(`Failed to load expense (HTTP ${r.status})`);
+  return r.json() as Promise<SavedExpense>;
+}
+
+function savedItemToRow(it: SavedExpense["items"][number]): ItemRow {
+  return {
+    id: crypto.randomUUID(),
+    rawName: it.rawName,
+    name: it.name,
+    quantity: String(it.quantity),
+    unitPrice: (it.unitPriceCents / 100).toFixed(2),
+    lineTotal: (it.lineTotalCents / 100).toFixed(2),
+    assigneeIds: it.assignments.map((a) => a.personId),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
-export default function NewItemizedPage() {
+export default function NewItemizedPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
+  // ?edit=<id> opens this form pre-filled to edit a saved expense
+  const { edit: editId } = use(searchParams);
   const router = useRouter();
+  const [editLoadError, setEditLoadError] = useState<string | null>(null);
 
   // People
   const [people, setPeople] = useState<Person[]>([]);
@@ -102,16 +146,41 @@ export default function NewItemizedPage() {
 
   useEffect(() => {
     setPeopleLoading(true);
-    fetch("/api/people")
-      .then((r) => r.json())
-      .then((data: Person[]) => {
+    Promise.all([
+      fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
+      editId ? loadSavedExpense(editId) : null,
+    ])
+      .then(([data, saved]) => {
         setPeople(data);
+        if (saved) {
+          const active = new Set(data.map((p) => p.id));
+          const involved = [
+            saved.payerId,
+            ...saved.items.flatMap((it) => it.assignments.map((a) => a.personId)),
+          ];
+          if (saved.type !== "ITEMIZED") throw new Error("This is not an itemized expense.");
+          if (!involved.every((id) => active.has(id))) {
+            throw new Error("This expense includes an archived person, so it can't be edited.");
+          }
+          setStore(saved.store ?? "");
+          setTags(saved.tags);
+          setPurchasedAt(saved.purchasedAt ? saved.purchasedAt.slice(0, 10) : "");
+          setTaxDollars((saved.taxCents / 100).toFixed(2));
+          setRows(saved.items.map(savedItemToRow));
+          setPayerId(saved.payerId);
+          setStep("table");
+          return;
+        }
         const def = data.find((p) => p.isDefault) ?? data[0];
         if (def) setPayerId(def.id);
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (editId) {
+          setEditLoadError(err instanceof Error ? err.message : "Couldn't load the expense.");
+        }
+      })
       .finally(() => setPeopleLoading(false));
-  }, []);
+  }, [editId]);
 
   // Derived: IDs of default (roommate) people — used as initial assignees
   const defaultAssigneeIds = people
@@ -299,13 +368,13 @@ export default function NewItemizedPage() {
     };
 
     try {
-      const res = await fetch("/api/expenses", {
-        method: "POST",
+      const res = await fetch(editId ? `/api/expenses/${editId}` : "/api/expenses", {
+        method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 201) {
+      if (res.ok) {
         const { id } = (await res.json()) as { id: string };
         router.push(`/expenses/${id}`);
         return;
@@ -360,15 +429,33 @@ export default function NewItemizedPage() {
   // Render
   // ---------------------------------------------------------------------------
 
+  if (editLoadError) {
+    return (
+      <div className="py-8 space-y-4">
+        <p
+          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          role="alert"
+        >
+          {editLoadError}
+        </p>
+        <Link href={`/expenses/${editId}`}>
+          <Button variant="secondary">Back to expense</Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-16">
       {/* Page heading */}
       <div>
         <h1 className="font-display text-3xl font-semibold text-ink">
-          New itemized expense
+          {editId ? "Edit itemized expense" : "New itemized expense"}
         </h1>
         <p className="mt-1.5 text-sm text-ink-muted">
-          Upload a receipt photo to auto-fill items, or enter them manually.
+          {editId
+            ? "Saving clears “logged to Splitwise” so you remember to update it there."
+            : "Upload a receipt photo to auto-fill items, or enter them manually."}
         </p>
       </div>
 
@@ -603,18 +690,26 @@ export default function NewItemizedPage() {
               onClick={handleSave}
               disabled={!canSave}
             >
-              {saving ? "Saving…" : "Save expense"}
+              {saving ? "Saving…" : editId ? "Save changes" : "Save expense"}
             </Button>
 
             <CopyButton summary={copySummary} disabled={!copySummary} />
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStep("photo")}
-            >
-              ← Back to photo
-            </Button>
+            {editId ? (
+              <Link href={`/expenses/${editId}`}>
+                <Button variant="ghost" size="sm">
+                  Cancel
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("photo")}
+              >
+                ← Back to photo
+              </Button>
+            )}
           </div>
         </>
       )}

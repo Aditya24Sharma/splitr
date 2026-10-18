@@ -1,200 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { computeBreakdown, BreakdownExpense } from '@/lib/expense-breakdown'
-import { parseTags, connectTags } from '@/lib/tags'
+import { computeBreakdown } from '@/lib/expense-breakdown'
+import { connectTags } from '@/lib/tags'
+import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
 
 // ---------------------------------------------------------------------------
 // POST /api/expenses
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
-  let body: any
+  let body: unknown
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { type } = body ?? {}
-
-  const tags = body?.tags === undefined ? [] : parseTags(body.tags)
-  if (tags === null) {
-    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 400 })
+  const parsed = parseExpenseInput(body)
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
+  const { input } = parsed
 
-  // ---- ITEMIZED ----
-  if (type === 'ITEMIZED') {
-    const { store, purchasedAt, payerId, taxCents, items } = body
-
-    if (!payerId || typeof payerId !== 'string') {
-      return NextResponse.json({ error: 'payerId is required' }, { status: 400 })
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'items must be a non-empty array' }, { status: 400 })
-    }
-    if (typeof taxCents !== 'number') {
-      return NextResponse.json({ error: 'taxCents is required' }, { status: 400 })
-    }
-
-    const totalCents = items.reduce((s: number, i: any) => s + (i.lineTotalCents ?? 0), 0) + taxCents
-
-    // Server-side validation via split engine
-    const prospective: BreakdownExpense = {
-      type: 'ITEMIZED',
-      splitMethod: 'ITEMIZED',
-      payerId,
-      taxCents,
-      totalCents,
-      items: items.map((it: any, idx: number) => ({
-        id: String(idx),
-        lineTotalCents: it.lineTotalCents,
-        assignments: (it.assigneeIds ?? []).map((pid: string) => ({ personId: pid })),
-      })),
-      participants: [],
-    }
-    try {
-      computeBreakdown(prospective)
-    } catch (err: any) {
-      return NextResponse.json({ error: err.message ?? 'Invalid split' }, { status: 400 })
-    }
-
-    const expense = await prisma.$transaction(async (tx) => {
-      const exp = await tx.expense.create({
-        data: {
-          type: 'ITEMIZED',
-          splitMethod: 'ITEMIZED',
-          payerId,
-          subtotalCents: totalCents - taxCents,
-          taxCents,
-          totalCents,
-          tags: { connectOrCreate: connectTags(tags) },
-          ...(store !== undefined && { store }),
-          ...(purchasedAt !== undefined && { purchasedAt: new Date(purchasedAt) }),
-        },
-      })
-      for (let idx = 0; idx < items.length; idx++) {
-        const it = items[idx]
-        const item = await tx.item.create({
-          data: {
-            expenseId: exp.id,
-            name: it.name,
-            rawName: it.rawName,
-            quantity: it.quantity ?? 1,
-            unitPriceCents: it.unitPriceCents,
-            lineTotalCents: it.lineTotalCents,
-            sortOrder: idx,
-          },
-        })
-        for (const pid of (it.assigneeIds ?? []) as string[]) {
-          await tx.itemAssignment.create({ data: { itemId: item.id, personId: pid } })
-        }
-      }
-      return tx.expense.findUniqueOrThrow({
-        where: { id: exp.id },
-        include: { items: { include: { assignments: true } }, participants: true },
-      })
+  const expense = await prisma.$transaction(async (tx) => {
+    const exp = await tx.expense.create({
+      data: { ...expenseFields(input), tags: { connectOrCreate: connectTags(input.tags) } },
     })
-
-    const breakdown = computeBreakdown({
-      type: 'ITEMIZED',
-      splitMethod: 'ITEMIZED',
-      payerId: expense.payerId,
-      taxCents: expense.taxCents,
-      totalCents: expense.totalCents,
-      items: expense.items.map(i => ({
-        id: i.id,
-        lineTotalCents: i.lineTotalCents,
-        assignments: i.assignments.map(a => ({ personId: a.personId })),
-      })),
-      participants: [],
+    await createExpenseChildren(tx, exp.id, input)
+    return tx.expense.findUniqueOrThrow({
+      where: { id: exp.id },
+      include: { items: { include: { assignments: true } }, participants: true },
     })
+  })
 
-    return NextResponse.json({ id: expense.id, breakdown }, { status: 201 })
-  }
-
-  // ---- SIMPLE ----
-  if (type === 'SIMPLE') {
-    const { description, payerId, totalCents, splitMethod, participants } = body
-
-    if (!payerId || typeof payerId !== 'string') {
-      return NextResponse.json({ error: 'payerId is required' }, { status: 400 })
-    }
-    if (!description || typeof description !== 'string') {
-      return NextResponse.json({ error: 'description is required' }, { status: 400 })
-    }
-    if (typeof totalCents !== 'number') {
-      return NextResponse.json({ error: 'totalCents is required' }, { status: 400 })
-    }
-    if (splitMethod !== 'EVEN' && splitMethod !== 'EXACT') {
-      return NextResponse.json({ error: 'splitMethod must be EVEN or EXACT' }, { status: 400 })
-    }
-    if (!Array.isArray(participants) || participants.length === 0) {
-      return NextResponse.json({ error: 'participants must be a non-empty array' }, { status: 400 })
-    }
-
-    // Server-side validation via split engine
-    const prospective: BreakdownExpense = {
-      type: 'SIMPLE',
-      splitMethod,
-      payerId,
-      taxCents: 0,
-      totalCents,
-      items: [],
-      participants: participants.map((p: any) => ({
-        personId: p.personId,
-        exactAmountCents: p.exactAmountCents ?? null,
-      })),
-    }
-    try {
-      computeBreakdown(prospective)
-    } catch (err: any) {
-      return NextResponse.json({ error: err.message ?? 'Invalid split' }, { status: 400 })
-    }
-
-    const expense = await prisma.$transaction(async (tx) => {
-      const exp = await tx.expense.create({
-        data: {
-          type: 'SIMPLE',
-          splitMethod,
-          description,
-          payerId,
-          subtotalCents: totalCents,
-          taxCents: 0,
-          totalCents,
-          tags: { connectOrCreate: connectTags(tags) },
-        },
-      })
-      for (const p of participants as any[]) {
-        await tx.expenseParticipant.create({
-          data: {
-            expenseId: exp.id,
-            personId: p.personId,
-            exactAmountCents: p.exactAmountCents ?? null,
-          },
-        })
-      }
-      return tx.expense.findUniqueOrThrow({
-        where: { id: exp.id },
-        include: { items: { include: { assignments: true } }, participants: true },
-      })
-    })
-
-    const breakdown = computeBreakdown({
-      type: 'SIMPLE',
-      splitMethod,
-      payerId: expense.payerId,
-      taxCents: expense.taxCents,
-      totalCents: expense.totalCents,
-      items: [],
-      participants: expense.participants.map(p => ({
-        personId: p.personId,
-        exactAmountCents: p.exactAmountCents,
-      })),
-    })
-
-    return NextResponse.json({ id: expense.id, breakdown }, { status: 201 })
-  }
-
-  return NextResponse.json({ error: 'type must be ITEMIZED or SIMPLE' }, { status: 400 })
+  return NextResponse.json({ id: expense.id, breakdown: computeBreakdown(expense) }, { status: 201 })
 }
 
 // ---------------------------------------------------------------------------

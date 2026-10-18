@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
@@ -25,12 +25,41 @@ interface Person {
 
 type SplitMethod = "EVEN" | "EXACT";
 
+/** The parts of GET /api/expenses/[id] this form needs when editing */
+interface SavedExpense {
+  type: "ITEMIZED" | "SIMPLE";
+  description: string;
+  totalCents: number;
+  payerId: string;
+  splitMethod: SplitMethod | "ITEMIZED";
+  tags: string[];
+  participants: { personId: string; exactAmountCents: number | null }[];
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function loadSavedExpense(id: string): Promise<SavedExpense> {
+  const r = await fetch(`/api/expenses/${id}`);
+  if (r.status === 404) throw new Error("Expense not found.");
+  if (!r.ok) throw new Error(`Failed to load expense (HTTP ${r.status})`);
+  return r.json() as Promise<SavedExpense>;
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
-export default function NewSimplePage() {
+export default function NewSimplePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
+  // ?edit=<id> opens this form pre-filled to edit a saved expense
+  const { edit: editId } = use(searchParams);
   const router = useRouter();
+  const [editLoadError, setEditLoadError] = useState<string | null>(null);
 
   // People
   const [people, setPeople] = useState<Person[]>([]);
@@ -57,10 +86,34 @@ export default function NewSimplePage() {
 
   useEffect(() => {
     setPeopleLoading(true);
-    fetch("/api/people")
-      .then((r) => r.json())
-      .then((data: Person[]) => {
+    Promise.all([
+      fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
+      editId ? loadSavedExpense(editId) : null,
+    ])
+      .then(([data, saved]) => {
         setPeople(data);
+        if (saved) {
+          const active = new Set(data.map((p) => p.id));
+          const involved = [saved.payerId, ...saved.participants.map((p) => p.personId)];
+          if (saved.type !== "SIMPLE") throw new Error("This is not a simple expense.");
+          if (!involved.every((id) => active.has(id))) {
+            throw new Error("This expense includes an archived person, so it can't be edited.");
+          }
+          setDescription(saved.description);
+          setTags(saved.tags);
+          setAmountDollars((saved.totalCents / 100).toFixed(2));
+          setPayerId(saved.payerId);
+          setParticipantIds(new Set(saved.participants.map((p) => p.personId)));
+          setSplitMethod(saved.splitMethod === "EXACT" ? "EXACT" : "EVEN");
+          setExactAmounts(
+            Object.fromEntries(
+              saved.participants
+                .filter((p) => p.exactAmountCents !== null)
+                .map((p) => [p.personId, (p.exactAmountCents! / 100).toFixed(2)])
+            )
+          );
+          return;
+        }
         const def = data.find((p) => p.isDefault) ?? data[0];
         if (def) setPayerId(def.id);
         // Pre-check default (roommate) people
@@ -69,9 +122,13 @@ export default function NewSimplePage() {
         );
         setParticipantIds(defaultIds.size > 0 ? defaultIds : new Set());
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (editId) {
+          setEditLoadError(err instanceof Error ? err.message : "Couldn't load the expense.");
+        }
+      })
       .finally(() => setPeopleLoading(false));
-  }, []);
+  }, [editId]);
 
   // ---------------------------------------------------------------------------
   // Derived values
@@ -204,13 +261,13 @@ export default function NewSimplePage() {
     };
 
     try {
-      const res = await fetch("/api/expenses", {
-        method: "POST",
+      const res = await fetch(editId ? `/api/expenses/${editId}` : "/api/expenses", {
+        method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 201) {
+      if (res.ok) {
         const { id } = (await res.json()) as { id: string };
         router.push(`/expenses/${id}`);
         return;
@@ -227,6 +284,26 @@ export default function NewSimplePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — edit load failure
+  // ---------------------------------------------------------------------------
+
+  if (editLoadError) {
+    return (
+      <div className="py-8 space-y-4">
+        <p
+          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          role="alert"
+        >
+          {editLoadError}
+        </p>
+        <Link href={`/expenses/${editId}`}>
+          <Button variant="secondary">Back to expense</Button>
+        </Link>
+      </div>
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -263,10 +340,12 @@ export default function NewSimplePage() {
       {/* Page heading */}
       <div>
         <h1 className="font-display text-3xl font-semibold text-ink">
-          New simple expense
+          {editId ? "Edit simple expense" : "New simple expense"}
         </h1>
         <p className="mt-1.5 text-sm text-ink-muted">
-          Split a fixed total evenly or by exact amounts.
+          {editId
+            ? "Saving clears “logged to Splitwise” so you remember to update it there."
+            : "Split a fixed total evenly or by exact amounts."}
         </p>
       </div>
 
@@ -510,9 +589,9 @@ export default function NewSimplePage() {
       {/* ── Action bar ────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="primary" onClick={handleSave} disabled={!canSave}>
-          {saving ? "Saving…" : "Save expense"}
+          {saving ? "Saving…" : editId ? "Save changes" : "Save expense"}
         </Button>
-        <Link href="/">
+        <Link href={editId ? `/expenses/${editId}` : "/"}>
           <Button variant="ghost" size="sm">
             Cancel
           </Button>

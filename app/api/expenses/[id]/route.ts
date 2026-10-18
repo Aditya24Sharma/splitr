@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
 import { parseTags, connectTags } from '@/lib/tags'
+import { parseExpenseInput, expenseFields, createExpenseChildren } from '@/lib/expense-input'
 
 // ---------------------------------------------------------------------------
 // GET /api/expenses/[id]
@@ -98,6 +99,59 @@ export async function PATCH(
     }
     throw e
   }
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/expenses/[id]  — replace an expense with an edited version.
+// Same body as POST /api/expenses; the type can't change. Clears
+// loggedToSplitwise so the edit gets re-entered in Splitwise.
+// ---------------------------------------------------------------------------
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const parsed = parseExpenseInput(body)
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
+  }
+  const { input } = parsed
+
+  const existing = await prisma.expense.findUnique({ where: { id }, select: { type: true } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
+  }
+  if (existing.type !== input.type) {
+    return NextResponse.json({ error: 'expense type cannot be changed' }, { status: 400 })
+  }
+
+  const expense = await prisma.$transaction(async (tx) => {
+    await tx.item.deleteMany({ where: { expenseId: id } }) // assignments cascade
+    await tx.expenseParticipant.deleteMany({ where: { expenseId: id } })
+    await tx.expense.update({
+      where: { id },
+      data: {
+        ...expenseFields(input),
+        loggedToSplitwise: false,
+        tags: { set: [], connectOrCreate: connectTags(input.tags) },
+      },
+    })
+    await createExpenseChildren(tx, id, input)
+    return tx.expense.findUniqueOrThrow({
+      where: { id },
+      include: { items: { include: { assignments: true } }, participants: true },
+    })
+  })
+
+  return NextResponse.json({ id: expense.id, breakdown: computeBreakdown(expense) })
 }
 
 // ---------------------------------------------------------------------------

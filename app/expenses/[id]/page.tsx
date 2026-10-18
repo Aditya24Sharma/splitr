@@ -420,6 +420,14 @@ export default function ExpenseDetailPage({
                 ? "Logged to Splitwise"
                 : "Mark as logged"}
             </button>
+
+            <Link
+              href={`/expenses/new/${expense.type === "ITEMIZED" ? "itemized" : "simple"}?edit=${expense.id}`}
+            >
+              <Button variant="secondary" size="sm">
+                Edit
+              </Button>
+            </Link>
           </div>
 
           {/* Delete */}
