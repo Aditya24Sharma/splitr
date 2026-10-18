@@ -14,7 +14,7 @@ export default function AppNav() {
 
   return (
     <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-ink">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3 sm:gap-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-2 sm:gap-6">
         {/* Wordmark */}
         <Link
           href="/"
@@ -25,7 +25,7 @@ export default function AppNav() {
         </Link>
 
         {/* Sections */}
-        <nav className="flex items-center gap-1 flex-1 min-w-0" aria-label="Main navigation">
+        <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto" aria-label="Main navigation">
           {NAV_LINKS.map(({ label, href }) => {
             const active =
               href === "/"
@@ -54,10 +54,11 @@ export default function AppNav() {
         {/* Primary action */}
         <Link
           href="/expenses/new"
-          className="shrink-0 inline-flex items-center gap-1 h-9 px-4 rounded-full bg-ink text-white text-sm font-semibold hover:bg-accent-hover transition-colors"
+          aria-label="New expense"
+          className="shrink-0 inline-flex items-center justify-center gap-1 h-9 w-9 sm:w-auto sm:px-4 rounded-full bg-ink text-white text-sm font-semibold hover:bg-accent-hover transition-colors"
         >
-          <span aria-hidden="true" className="text-base leading-none">+</span>
-          New
+          <span aria-hidden="true" className="text-lg sm:text-base leading-none">+</span>
+          <span className="hidden sm:inline">New</span>
         </Link>
       </div>
     </header>
