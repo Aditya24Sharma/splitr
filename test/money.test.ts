@@ -13,6 +13,11 @@ describe('toCents/toDollars/formatUSD', () => {
     expect(formatUSD(8)).toBe('$0.08')
     expect(formatUSD(0)).toBe('$0.00')
     expect(formatUSD(-150)).toBe('-$1.50')
+    expect(formatUSD(124050)).toBe('$1,240.50')
+    expect(formatUSD(100000)).toBe('$1,000.00')
+    expect(formatUSD(99999)).toBe('$999.99')
+    expect(formatUSD(123456789)).toBe('$1,234,567.89')
+    expect(formatUSD(-124050)).toBe('-$1,240.50')
   })
 })
 

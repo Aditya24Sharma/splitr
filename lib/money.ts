@@ -9,7 +9,9 @@ export function toDollars(cents: Cents): number {
 export function formatUSD(cents: Cents): string {
   const neg = cents < 0
   const v = Math.abs(cents)
-  return `${neg ? '-' : ''}$${Math.floor(v / 100)}.${String(v % 100).padStart(2, '0')}`
+  // Commas every three digits: 124050 -> "$1,240.50"
+  const dollars = String(Math.floor(v / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${neg ? '-' : ''}$${dollars}.${String(v % 100).padStart(2, '0')}`
 }
 export function apportion(total: Cents, weights: number[]): Cents[] {
   if (weights.length === 0) throw new Error('apportion: weights must be non-empty')
