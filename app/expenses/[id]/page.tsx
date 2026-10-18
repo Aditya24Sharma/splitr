@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/CopyButton";
 import { PersonChip } from "@/components/PersonChip";
+import { TagInput } from "@/components/TagInput";
 import { formatUSD } from "@/lib/money";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ interface Expense {
   loggedToSplitwise: boolean;
   createdAt: string;
   splitMethod: "EVEN" | "EXACT" | "ITEMIZED";
+  tags: string[];
   breakdown: {
     payerId: string;
     perPerson: { personId: string; cents: number }[];
@@ -76,6 +78,10 @@ export default function ExpenseDetailPage({
   const [logged, setLogged] = useState(false);
   const [logPending, setLogPending] = useState(false);
 
+  // Tags (saved as soon as they change)
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+
   // Delete state
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -107,6 +113,7 @@ export default function ExpenseDetailPage({
         }
         setExpense(exp);
         setLogged(exp.loggedToSplitwise);
+        setTags(exp.tags);
         setPeople(ppl);
         setLoadState("ready");
       })
@@ -145,6 +152,29 @@ export default function ExpenseDetailPage({
       setLogged(!newVal); // revert
     } finally {
       setLogPending(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tags
+  // ---------------------------------------------------------------------------
+
+  async function handleTagsChange(next: string[]) {
+    const prev = tags;
+    setTags(next); // optimistic
+    setTagsError(null);
+    try {
+      const res = await fetch(`/api/expenses/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: next }),
+      });
+      if (!res.ok) throw new Error();
+      const saved = (await res.json()) as { tags: string[] };
+      setTags(saved.tags);
+    } catch {
+      setTags(prev); // revert
+      setTagsError("Couldn't save tags — please try again");
     }
   }
 
@@ -287,6 +317,16 @@ export default function ExpenseDetailPage({
             />
           ) : (
             <span className="text-sm text-ink">{payerName}</span>
+          )}
+        </div>
+
+        <div className="mt-4 border-t border-rim pt-4 space-y-1.5">
+          <p className="text-sm text-ink-muted">Tags</p>
+          <TagInput value={tags} onChange={handleTagsChange} />
+          {tagsError && (
+            <p className="text-xs text-danger" role="alert">
+              {tagsError}
+            </p>
           )}
         </div>
       </Card>

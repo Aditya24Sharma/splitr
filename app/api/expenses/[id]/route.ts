@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { computeBreakdown } from '@/lib/expense-breakdown'
+import { parseTags, connectTags } from '@/lib/tags'
 
 // ---------------------------------------------------------------------------
 // GET /api/expenses/[id]
@@ -18,6 +19,7 @@ export async function GET(
       items: { include: { assignments: true }, orderBy: { sortOrder: 'asc' } },
       participants: true,
       payer: true,
+      tags: { orderBy: { name: 'asc' } },
     },
   })
 
@@ -42,11 +44,11 @@ export async function GET(
     })),
   })
 
-  return NextResponse.json({ ...expense, breakdown })
+  return NextResponse.json({ ...expense, tags: expense.tags.map(t => t.name), breakdown })
 }
 
 // ---------------------------------------------------------------------------
-// PATCH /api/expenses/[id]  — currently supports { loggedToSplitwise: boolean }
+// PATCH /api/expenses/[id]  — supports { loggedToSplitwise?: boolean, tags?: string[] }
 // ---------------------------------------------------------------------------
 export async function PATCH(
   req: NextRequest,
@@ -63,21 +65,33 @@ export async function PATCH(
 
   const { loggedToSplitwise } = body ?? {}
 
-  if (typeof loggedToSplitwise !== 'boolean') {
+  if (loggedToSplitwise !== undefined && typeof loggedToSplitwise !== 'boolean') {
     return NextResponse.json({ error: 'loggedToSplitwise must be a boolean' }, { status: 400 })
+  }
+  const tags = body?.tags === undefined ? undefined : parseTags(body.tags)
+  if (tags === null) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 400 })
+  }
+  if (loggedToSplitwise === undefined && tags === undefined) {
+    return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
   }
 
   try {
     const expense = await prisma.expense.update({
       where: { id },
-      data: { loggedToSplitwise },
+      data: {
+        ...(loggedToSplitwise !== undefined && { loggedToSplitwise }),
+        // set: [] unlinks the old tags, then the new list is linked (created if missing)
+        ...(tags !== undefined && { tags: { set: [], connectOrCreate: connectTags(tags) } }),
+      },
       include: {
         items: { include: { assignments: true }, orderBy: { sortOrder: 'asc' } },
         participants: true,
         payer: true,
+        tags: { orderBy: { name: 'asc' } },
       },
     })
-    return NextResponse.json(expense)
+    return NextResponse.json({ ...expense, tags: expense.tags.map(t => t.name) })
   } catch (e: unknown) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 })

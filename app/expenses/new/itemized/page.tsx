@@ -10,6 +10,7 @@ import { ItemTable, type ItemRow } from "@/components/ItemTable";
 import { BulkAssignBar } from "@/components/BulkAssignBar";
 import { BreakdownCard } from "@/components/BreakdownCard";
 import { CopyButton } from "@/components/CopyButton";
+import { TagInput } from "@/components/TagInput";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitItemized } from "@/lib/split";
 import type { ParsedReceipt } from "@/lib/types";
@@ -79,6 +80,7 @@ export default function NewItemizedPage() {
 
   // Table data
   const [store, setStore] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [purchasedAt, setPurchasedAt] = useState("");
   const [taxDollars, setTaxDollars] = useState("0.00");
   const [rows, setRows] = useState<ItemRow[]>([]);
@@ -283,6 +285,7 @@ export default function NewItemizedPage() {
       type: "ITEMIZED" as const,
       ...(store.trim() ? { store: store.trim() } : {}),
       ...(purchasedAt ? { purchasedAt } : {}),
+      tags,
       payerId,
       taxCents: toCents(parseFloat(taxDollars) || 0),
       items: rows.map((row) => ({
@@ -497,6 +500,11 @@ export default function NewItemizedPage() {
                   onChange={(e) => setPurchasedAt(e.target.value)}
                 />
               </Field>
+              <div className="sm:col-span-2">
+                <Field label="Tags" hint="Press Enter to add. Use tags to filter expenses later.">
+                  <TagInput value={tags} onChange={setTags} />
+                </Field>
+              </div>
             </div>
           </Card>
 

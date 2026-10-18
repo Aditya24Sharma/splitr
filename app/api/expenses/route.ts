@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { computeBreakdown, BreakdownExpense } from '@/lib/expense-breakdown'
+import { parseTags, connectTags } from '@/lib/tags'
 
 // ---------------------------------------------------------------------------
 // POST /api/expenses
@@ -14,6 +15,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { type } = body ?? {}
+
+  const tags = body?.tags === undefined ? [] : parseTags(body.tags)
+  if (tags === null) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 400 })
+  }
 
   // ---- ITEMIZED ----
   if (type === 'ITEMIZED') {
@@ -60,6 +66,7 @@ export async function POST(req: NextRequest) {
           subtotalCents: totalCents - taxCents,
           taxCents,
           totalCents,
+          tags: { connectOrCreate: connectTags(tags) },
           ...(store !== undefined && { store }),
           ...(purchasedAt !== undefined && { purchasedAt: new Date(purchasedAt) }),
         },
@@ -153,6 +160,7 @@ export async function POST(req: NextRequest) {
           subtotalCents: totalCents,
           taxCents: 0,
           totalCents,
+          tags: { connectOrCreate: connectTags(tags) },
         },
       })
       for (const p of participants as any[]) {
@@ -196,9 +204,10 @@ export async function GET() {
   const expenses = await prisma.expense.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
-      items: { include: { assignments: true } },
+      items: { include: { assignments: true }, orderBy: { sortOrder: 'asc' } },
       participants: true,
       payer: true,
+      tags: { orderBy: { name: 'asc' } },
     },
   })
 
@@ -231,6 +240,8 @@ export async function GET() {
       splitMethod: exp.splitMethod,
       loggedToSplitwise: exp.loggedToSplitwise,
       createdAt: exp.createdAt,
+      tags: exp.tags.map(t => t.name),
+      itemNames: exp.items.map(i => i.name),
       breakdown: { perPerson: breakdown.perPerson },
     }
   })
