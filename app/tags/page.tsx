@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 
@@ -164,10 +163,10 @@ export default function TagsPage() {
     <div className="space-y-8">
       {/* Page heading */}
       <div>
-        <h1 className="font-display text-3xl font-semibold text-ink">Tags</h1>
-        <p className="mt-1.5 text-sm text-ink-muted">
-          Create the tags you pick from on each expense, e.g. walmart or trip
-          to goa. Renaming a tag updates every expense that uses it.
+        <h1 className="font-display text-6xl sm:text-7xl uppercase">Tags</h1>
+        <p className="mt-3 text-sm text-ink-muted">
+          Group expenses by store or trip. Renaming a tag updates every expense
+          that uses it.
         </p>
       </div>
 
@@ -178,7 +177,7 @@ export default function TagsPage() {
 
       {loadState === "error" && (
         <div
-          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           <span className="flex-1">{loadError}</span>
@@ -193,9 +192,12 @@ export default function TagsPage() {
       )}
 
       {loadState === "ready" && tags.length > 0 && (
-        <section aria-label="Tags" className="space-y-2">
+        <section
+          aria-label="Tags"
+          className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden"
+        >
           {tags.map((tag) => (
-            <Card key={tag.id} padding="sm">
+            <div key={tag.id} className="px-5 py-3.5 bg-surface">
               {editId === tag.id ? (
                 /* ---- Inline rename form ---- */
                 <form onSubmit={handleRename} className="space-y-2">
@@ -232,9 +234,7 @@ export default function TagsPage() {
               ) : (
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink truncate">
-                      {tag.name}
-                    </p>
+                    <p className="font-semibold truncate">#{tag.name}</p>
                     <p className="text-xs text-ink-muted">
                       {expensesLabel(tag.expenseCount)}
                     </p>
@@ -292,20 +292,20 @@ export default function TagsPage() {
                   )}
                 </div>
               )}
-            </Card>
+            </div>
           ))}
         </section>
       )}
 
       {/* ---- Add form ---- */}
-      <Card padding="md">
-        <form onSubmit={handleAdd} className="space-y-2">
-          <h2 className="text-sm font-semibold text-ink">Add a tag</h2>
+      <div className="rounded-3xl border border-ink bg-lavender p-6">
+        <form onSubmit={handleAdd} className="space-y-3">
+          <h2 className="font-display text-3xl uppercase">Add a tag</h2>
           <div className="flex items-center gap-2">
             <Input
               value={addName}
               onChange={(e) => setAddName(e.target.value)}
-              placeholder="e.g. walmart"
+              placeholder="walmart, goa trip…"
               aria-label="Tag name"
             />
             <Button
@@ -323,7 +323,7 @@ export default function TagsPage() {
             </p>
           )}
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

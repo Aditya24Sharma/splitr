@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useId } from "react";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
@@ -59,7 +58,7 @@ function ColorPicker({ value, onChange, id }: ColorPickerProps) {
           onClick={() => onChange(c)}
           title={c}
           className={[
-            "w-6 h-6 rounded-md border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+            "w-7 h-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
             value === c
               ? "border-ink scale-110"
               : "border-transparent hover:scale-105",
@@ -70,10 +69,10 @@ function ColorPicker({ value, onChange, id }: ColorPickerProps) {
         />
       ))}
       {/* Custom colour via native picker */}
-      <div className="relative w-6 h-6" title="Custom color">
+      <div className="relative w-7 h-7" title="Custom color">
         <div
-          className="w-6 h-6 rounded-md border-2 border-transparent"
-          style={{ backgroundColor: PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number]) ? "#E2DDD7" : value }}
+          className="w-7 h-7 rounded-full border border-dashed border-ink"
+          style={{ backgroundColor: PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number]) ? "#FFFFFF" : value }}
         />
         <input
           type="color"
@@ -279,12 +278,9 @@ export default function PeoplePage() {
     <div className="space-y-8">
       {/* Page heading */}
       <div>
-        <h1 className="font-display text-3xl font-semibold text-ink">
-          People
-        </h1>
-        <p className="mt-1.5 text-sm text-ink-muted">
-          Manage who you split expenses with. Default roommates are included
-          automatically on new expenses.
+        <h1 className="font-display text-6xl sm:text-7xl uppercase">People</h1>
+        <p className="mt-3 text-sm text-ink-muted">
+          Who you split with. Roommates are ticked automatically on new expenses.
         </p>
       </div>
 
@@ -295,7 +291,7 @@ export default function PeoplePage() {
 
       {loadState === "error" && (
         <div
-          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           <span className="flex-1">{loadError}</span>
@@ -313,11 +309,11 @@ export default function PeoplePage() {
 
       {loadState === "ready" && people.length > 0 && (
         <section aria-label="Active people">
-          <div className="space-y-2">
+          <div className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
             {people.map((person) =>
               editId === person.id ? (
                 /* ---- Inline edit form ---- */
-                <Card key={person.id} padding="md">
+                <div key={person.id} className="bg-mist p-5">
                   <form onSubmit={handleEdit} noValidate>
                     <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                       {/* Name */}
@@ -366,9 +362,9 @@ export default function PeoplePage() {
                         type="checkbox"
                         checked={editDefault}
                         onChange={(e) => setEditDefault(e.target.checked)}
-                        className="w-4 h-4 rounded border-rim accent-accent"
+                        className="w-5 h-5 accent-[#0B0B0C]"
                       />
-                      Roommate (included by default)
+                      Roommate (ticked by default)
                     </label>
 
                     {/* Actions */}
@@ -392,10 +388,10 @@ export default function PeoplePage() {
                       </Button>
                     </div>
                   </form>
-                </Card>
+                </div>
               ) : (
                 /* ---- Person row ---- */
-                <Card key={person.id} padding="md">
+                <div key={person.id} className="px-5 py-3.5 bg-surface">
                   <div className="flex items-center gap-3 min-w-0">
                     <PersonChip
                       name={person.name}
@@ -405,7 +401,7 @@ export default function PeoplePage() {
 
 
                     {person.isDefault && (
-                      <span className="text-xs font-medium text-ink-muted bg-canvas border border-rim rounded-md px-2 py-0.5 shrink-0">
+                      <span className="text-xs font-semibold bg-mint-dim border border-mint rounded-full px-2.5 py-0.5 shrink-0">
                         Roommate
                       </span>
                     )}
@@ -449,7 +445,7 @@ export default function PeoplePage() {
                               setArchiveId(person.id);
                               setEditId(null);
                             }}
-                            className="text-danger/70 hover:text-danger hover:bg-danger-dim border-transparent"
+                            className="hover:!text-danger hover:!bg-danger-dim"
                           >
                             Archive
                           </Button>
@@ -462,7 +458,7 @@ export default function PeoplePage() {
                       {archiveError}
                     </p>
                   )}
-                </Card>
+                </div>
               )
             )}
           </div>
@@ -470,10 +466,8 @@ export default function PeoplePage() {
       )}
 
       {/* ---- Add person form ---- */}
-      <Card padding="lg">
-        <h2 className="text-base font-semibold text-ink mb-5">
-          Add someone
-        </h2>
+      <div className="rounded-3xl border border-ink bg-sky p-6">
+        <h2 className="font-display text-3xl uppercase mb-5">Add someone</h2>
 
         <form onSubmit={handleAdd} noValidate>
           <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -514,9 +508,9 @@ export default function PeoplePage() {
               type="checkbox"
               checked={addDefault}
               onChange={(e) => setAddDefault(e.target.checked)}
-              className="w-4 h-4 rounded border-rim accent-accent"
+              className="w-5 h-5 accent-[#0B0B0C]"
             />
-            Roommate (included by default on new expenses)
+            Roommate (ticked by default on new expenses)
           </label>
 
           {addError && (
@@ -535,7 +529,7 @@ export default function PeoplePage() {
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
