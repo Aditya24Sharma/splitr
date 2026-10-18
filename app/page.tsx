@@ -227,8 +227,8 @@ export default function HomePage() {
             type="search"
             value={itemQuery}
             onChange={(e) => setItemQuery(e.target.value)}
-            placeholder="Search items, e.g. milk"
-            aria-label="Search items by name"
+            placeholder="Search expenses or items, e.g. gas or milk"
+            aria-label="Search expenses and items by name"
           />
           {allTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">

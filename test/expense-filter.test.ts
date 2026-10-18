@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { filterExpenses } from '@/lib/expense-filter'
 
-const walmart = { id: 'w', tags: ['walmart'], itemNames: ['Whole Milk', 'Bread'] }
-const tripWalmart = { id: 'tw', tags: ['walmart', 'trip to x'], itemNames: ['Sunscreen'] }
-const dinner = { id: 'd', tags: [], itemNames: [] }
+const walmart = { id: 'w', store: 'Walmart', description: '', tags: ['walmart'], itemNames: ['Whole Milk', 'Bread'] }
+const tripWalmart = { id: 'tw', store: 'Walmart', description: '', tags: ['walmart', 'trip to x'], itemNames: ['Sunscreen'] }
+const dinner = { id: 'd', store: null, description: 'Dinner at Luigi', tags: [], itemNames: [] }
 const all = [walmart, tripWalmart, dinner]
 const ids = (r: { expense: { id: string } }[]) => r.map(m => m.expense.id)
 
@@ -21,6 +21,16 @@ describe('filterExpenses', () => {
     const r = filterExpenses(all, [], '  MILK ')
     expect(ids(r)).toEqual(['w'])
     expect(r[0].matchedItems).toEqual(['Whole Milk'])
+  })
+
+  it('matches a simple expense by its description', () => {
+    const r = filterExpenses(all, [], 'luigi')
+    expect(ids(r)).toEqual(['d'])
+    expect(r[0].matchedItems).toEqual([])
+  })
+
+  it('matches an itemized expense by its store', () => {
+    expect(ids(filterExpenses(all, [], 'walmart'))).toEqual(['w', 'tw'])
   })
 
   it('combines tag filter and search', () => {
