@@ -75,6 +75,14 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
+  // Every tag on the Tags page (for bulk add/remove), not just ones in use
+  const [tagList, setTagList] = useState<string[]>([]);
+
+  // Bulk actions on ticked expenses
+  const [bulkTag, setBulkTag] = useState("");
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -132,6 +140,31 @@ export default function HomePage() {
     );
   }
 
+  async function runBulk(action: Record<string, unknown>) {
+    setBulkPending(true);
+    setBulkError(null);
+    try {
+      const ids = selectedExpenses.map((e) => e.id);
+      const res = await fetch("/api/expenses/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, ...action }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `Error ${res.status}`);
+      }
+      if (action.action === "delete") setSelectedIds(new Set());
+      const listRes = await fetch("/api/expenses");
+      if (listRes.ok) setExpenses((await listRes.json()) as ExpenseListItem[]);
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBulkPending(false);
+      setConfirmDelete(false);
+    }
+  }
+
   function personName(id: string): string {
     return personById.get(id)?.name ?? id.slice(0, 6);
   }
@@ -149,10 +182,15 @@ export default function HomePage() {
         if (!r.ok) return [] as Person[];
         return r.json() as Promise<Person[]>;
       }),
+      fetch("/api/tags").then((r) => {
+        if (!r.ok) return [] as { name: string }[];
+        return r.json() as Promise<{ name: string }[]>;
+      }),
     ])
-      .then(([exp, ppl]) => {
+      .then(([exp, ppl, tgs]) => {
         setExpenses(exp);
         setPeople(ppl);
+        setTagList(tgs.map((t) => t.name));
         setLoadState("ready");
       })
       .catch((err) => {
@@ -382,6 +420,93 @@ export default function HomePage() {
               )}
             </div>
           </div>
+          {selectedExpenses.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-rim space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={bulkTag}
+                  onChange={(e) => setBulkTag(e.target.value)}
+                  disabled={bulkPending}
+                  aria-label="Tag to add or remove"
+                  className={`${SELECT_CLASS} w-auto`}
+                >
+                  <option value="">Choose a tag…</option>
+                  {tagList.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!bulkTag || bulkPending}
+                  onClick={() => runBulk({ action: "add-tag", tag: bulkTag })}
+                >
+                  Add tag
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!bulkTag || bulkPending}
+                  onClick={() => runBulk({ action: "remove-tag", tag: bulkTag })}
+                >
+                  Remove tag
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={bulkPending}
+                  onClick={() => runBulk({ action: "set-logged", logged: true })}
+                >
+                  Mark logged
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={bulkPending}
+                  onClick={() => runBulk({ action: "set-logged", logged: false })}
+                >
+                  Mark not logged
+                </Button>
+                {confirmDelete ? (
+                  <>
+                    <span className="text-sm text-ink-muted">
+                      Delete {selectedExpenses.length} expense
+                      {selectedExpenses.length === 1 ? "" : "s"}? This can&apos;t be undone.
+                    </span>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={bulkPending}
+                      onClick={() => runBulk({ action: "delete" })}
+                    >
+                      {bulkPending ? "Deleting…" : "Delete"}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={bulkPending}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
+              {bulkError && (
+                <p className="text-xs text-danger" role="alert">
+                  {bulkError}
+                </p>
+              )}
+            </div>
+          )}
           {selectedExpenses.length > 0 && (
             <ul className="mt-3 space-y-1">
               {debts.length === 0 ? (
