@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { PlaidConfigError, getPlaid } from '@/lib/plaid'
+import { PlaidConfigError, plaid } from '@/lib/plaid'
 
 // ---------------------------------------------------------------------------
 // DELETE /api/plaid/items/[itemId] — unlink a bank at Plaid and drop its
@@ -14,7 +14,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!item) return NextResponse.json({ error: 'Bank not found' }, { status: 404 })
 
   try {
-    await getPlaid().itemRemove({ access_token: item.accessToken })
+    await plaid.itemRemove(item.accessToken)
   } catch (error) {
     if (error instanceof PlaidConfigError) {
       return NextResponse.json({ error: error.message }, { status: 503 })

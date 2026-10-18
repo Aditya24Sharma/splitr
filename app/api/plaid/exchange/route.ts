@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { PlaidConfigError, getPlaid, plaidCountryCodes } from '@/lib/plaid'
+import { PlaidConfigError, plaid } from '@/lib/plaid'
 import { accountFields } from '@/lib/sync'
 
 export async function POST(req: NextRequest) {
@@ -14,39 +14,34 @@ export async function POST(req: NextRequest) {
   if (!publicToken) return NextResponse.json({ error: 'Missing public_token' }, { status: 400 })
 
   try {
-    const plaid = getPlaid()
-    const exchange = await plaid.itemPublicTokenExchange({ public_token: publicToken })
-    const accessToken = exchange.data.access_token
+    const exchange = await plaid.publicTokenExchange(publicToken)
+    const accessToken = exchange.access_token
 
-    const itemInfo = await plaid.itemGet({ access_token: accessToken })
-    const institutionId = itemInfo.data.item.institution_id ?? null
+    const itemInfo = await plaid.itemGet(accessToken)
+    const institutionId = itemInfo.item.institution_id ?? null
 
     let institutionName: string | null = null
     let institutionLogo: string | null = null
     let institutionColor: string | null = null
     if (institutionId) {
-      const inst = await plaid.institutionsGetById({
-        institution_id: institutionId,
-        country_codes: plaidCountryCodes(),
-        options: { include_optional_metadata: true },
-      })
-      institutionName = inst.data.institution.name
-      institutionLogo = inst.data.institution.logo ?? null
-      institutionColor = inst.data.institution.primary_color ?? null
+      const { institution } = await plaid.institutionGetById(institutionId)
+      institutionName = institution.name
+      institutionLogo = institution.logo ?? null
+      institutionColor = institution.primary_color ?? null
     }
 
-    const accountsResp = await plaid.accountsGet({ access_token: accessToken })
+    const { accounts } = await plaid.accountsGet(accessToken)
 
     const item = await prisma.plaidItem.create({
       data: {
-        itemId: exchange.data.item_id,
+        itemId: exchange.item_id,
         accessToken,
         institutionId,
         institutionName,
         institutionLogo,
         institutionColor,
         accounts: {
-          create: accountsResp.data.accounts.map(acct => ({
+          create: accounts.map(acct => ({
             plaidAccountId: acct.account_id,
             ...accountFields(acct),
           })),
@@ -57,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       id: item.id,
       institution_name: item.institutionName,
-      account_count: accountsResp.data.accounts.length,
+      account_count: accounts.length,
     })
   } catch (error) {
     if (error instanceof PlaidConfigError) {

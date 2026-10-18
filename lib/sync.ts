@@ -1,6 +1,5 @@
-import type { AccountBase, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid'
 import { prisma } from '@/lib/db'
-import { getPlaid } from '@/lib/plaid'
+import { PlaidApiError, plaid, type PlaidAccount, type PlaidTransaction } from '@/lib/plaid'
 import { toCents } from '@/lib/money'
 import { todayLocal } from '@/lib/spending'
 
@@ -11,19 +10,10 @@ export interface SyncResult {
   removed: number
 }
 
-/** Extract a Plaid API error_code from an SDK (axios) error, if present. */
-function plaidErrorCode(error: unknown): string | undefined {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const data = (error as { response?: { data?: { error_code?: string } } }).response?.data
-    return data?.error_code
-  }
-  return undefined
-}
-
 const cents = (v: number | null | undefined) => (v != null ? toCents(v) : null)
 
 /** The Account columns that come from Plaid; shared by link and sync. */
-export function accountFields(acct: AccountBase) {
+export function accountFields(acct: PlaidAccount) {
   return {
     name: acct.name,
     officialName: acct.official_name ?? null,
@@ -54,12 +44,10 @@ export async function syncItem(itemDbId: number): Promise<SyncResult> {
   const item = await prisma.plaidItem.findUnique({ where: { id: itemDbId } })
   if (!item) throw new Error(`Plaid item ${itemDbId} not found`)
 
-  const plaid = getPlaid()
-
-  const balancesResp = await plaid.accountsGet({ access_token: item.accessToken })
+  const { accounts } = await plaid.accountsGet(item.accessToken)
   const snapshotDate = todayLocal()
   const accountMap = new Map<string, number>()
-  for (const acct of balancesResp.data.accounts) {
+  for (const acct of accounts) {
     const fields = accountFields(acct)
     const row = await prisma.account.upsert({
       where: { plaidAccountId: acct.account_id },
@@ -80,7 +68,7 @@ export async function syncItem(itemDbId: number): Promise<SyncResult> {
 
   const added: PlaidTransaction[] = []
   const modified: PlaidTransaction[] = []
-  const removed: RemovedTransaction[] = []
+  const removed: { transaction_id: string }[] = []
 
   let cursor: string | undefined = item.cursor ?? undefined
   let hasMore = true
@@ -88,19 +76,19 @@ export async function syncItem(itemDbId: number): Promise<SyncResult> {
   while (hasMore) {
     let resp
     try {
-      resp = await plaid.transactionsSync({ access_token: item.accessToken, cursor })
+      resp = await plaid.transactionsSync(item.accessToken, cursor)
     } catch (error) {
       // Right after linking Plaid is still pulling history and returns
       // PRODUCT_NOT_READY. Treat it as "no data yet"; the cursor is left
       // untouched so a later sync picks up where this one left off.
-      if (plaidErrorCode(error) === 'PRODUCT_NOT_READY') break
+      if (error instanceof PlaidApiError && error.code === 'PRODUCT_NOT_READY') break
       throw error
     }
-    added.push(...resp.data.added)
-    modified.push(...resp.data.modified)
-    removed.push(...resp.data.removed)
-    cursor = resp.data.next_cursor
-    hasMore = resp.data.has_more
+    added.push(...resp.added)
+    modified.push(...resp.modified)
+    removed.push(...resp.removed)
+    cursor = resp.next_cursor
+    hasMore = resp.has_more
     pages += 1
     if (pages > 50) break
   }
