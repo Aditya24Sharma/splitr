@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/CopyButton";
 import { PersonChip } from "@/components/PersonChip";
@@ -35,6 +34,14 @@ interface Expense {
   loggedToSplitwise: boolean;
   createdAt: string;
   splitMethod: "EVEN" | "EXACT" | "ITEMIZED";
+  taxCents: number;
+  items: {
+    id: string;
+    name: string;
+    quantity: number;
+    lineTotalCents: number;
+    assignments: { personId: string }[];
+  }[];
   tags: string[];
   breakdown: {
     payerId: string;
@@ -241,7 +248,7 @@ export default function ExpenseDetailPage({
   if (loadState === "notfound") {
     return (
       <div className="py-16 space-y-4 text-center">
-        <p className="text-sm text-ink-muted">Expense not found.</p>
+        <p className="font-display text-4xl uppercase">Expense not found</p>
         <Link href="/">
           <Button variant="secondary">Back to home</Button>
         </Link>
@@ -253,7 +260,7 @@ export default function ExpenseDetailPage({
     return (
       <div className="py-8 space-y-4">
         <p
-          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           {loadError ?? "Something went wrong."}
@@ -278,203 +285,168 @@ export default function ExpenseDetailPage({
   // Main render
   // ---------------------------------------------------------------------------
 
+  const editHref = `/expenses/new/${expense.type === "ITEMIZED" ? "itemized" : "simple"}?edit=${expense.id}`;
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* Back */}
+    <div className="space-y-8">
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink transition-colors"
       >
-        ← All expenses
+        ← Expenses
       </Link>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div>
-        <h1 className="font-display text-3xl font-semibold text-ink">
-          {label}
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          {formatDate(expenseDay(expense))}
-          {expense.type === "ITEMIZED" ? " · Itemized" : " · Simple split"}
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          {formatDate(expenseDay(expense))} · {expense.type === "ITEMIZED" ? "Receipt" : "Quick split"}
         </p>
-      </div>
-
-      {/* ── Summary card ─────────────────────────────────────────────────── */}
-      <Card padding="md">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs text-ink-muted font-medium">Total</p>
-          <p className="text-2xl font-semibold text-ink tabular-nums">
+        <h1 className="mt-2 font-display text-5xl sm:text-6xl uppercase break-words">{label}</h1>
+        <div className="mt-5 flex items-end gap-4 flex-wrap">
+          <p className="font-display text-7xl sm:text-8xl tabular-nums leading-none">
             {formatUSD(expense.totalCents)}
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 border-t border-rim pt-4">
-          <p className="text-sm text-ink-muted">Paid by</p>
-          {expense.payer ? (
-            <PersonChip
-              name={expense.payer.name}
-              colorHex={expense.payer.colorHex}
-              size="sm"
-              readOnly
-            />
-          ) : (
-            <span className="text-sm text-ink">{payerName}</span>
-          )}
-        </div>
-
-        <div className="mt-4 border-t border-rim pt-4 space-y-1.5">
-          <p className="text-sm text-ink-muted">Tags</p>
-          <TagPicker value={tags} onChange={handleTagsChange} />
-          {tagsError && (
-            <p className="text-xs text-danger" role="alert">
-              {tagsError}
-            </p>
-          )}
-        </div>
-      </Card>
-
-      {/* ── Per-person breakdown ─────────────────────────────────────────── */}
-      <Card padding="md">
-        <h2 className="text-sm font-semibold text-ink mb-3">Breakdown</h2>
-        <div className="space-y-2">
-          {expense.breakdown.perPerson.map(({ personId, cents }) => {
-            const person = resolvePerson(personId);
-            const name = person?.name ?? personId.slice(0, 8);
-            const isPayer = personId === expense.payerId;
-            return (
-              <div
-                key={personId}
-                className="flex items-center justify-between text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  {person ? (
-                    <PersonChip
-                      name={name}
-                      colorHex={person.colorHex}
-                      size="sm"
-                      readOnly
-                    />
-                  ) : (
-                    <span className="text-ink-muted text-xs">{name}</span>
-                  )}
-                  {isPayer && (
-                    <span className="text-xs text-ink-muted">(payer)</span>
-                  )}
-                </div>
-                <span className="font-semibold tabular-nums text-ink">
-                  {formatUSD(cents)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Owes section */}
-        {expense.breakdown.owes.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-rim">
-            <p className="text-xs font-medium text-ink-muted mb-2">
-              Settles up with {payerName}
-            </p>
-            <div className="space-y-1.5">
-              {expense.breakdown.owes.map(({ personId, cents }) => {
-                const person = resolvePerson(personId);
-                const name = person?.name ?? personId.slice(0, 8);
-                return (
-                  <div
-                    key={personId}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-ink-muted">{name}</span>
-                    <span className="tabular-nums text-ink">
-                      {formatUSD(cents)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="pb-1.5 flex items-center gap-2 text-sm text-ink-muted">
+            paid by
+            {expense.payer ? (
+              <PersonChip name={expense.payer.name} colorHex={expense.payer.colorHex} size="sm" readOnly />
+            ) : (
+              <span className="text-ink font-semibold">{payerName}</span>
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      </header>
 
-      {/* ── Actions ──────────────────────────────────────────────────────── */}
-      <Card padding="md">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <CopyButton summary={copySummary} />
-
-            <button
-              type="button"
-              onClick={handleToggleLogged}
-              disabled={logPending}
-              className={[
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
-                "disabled:opacity-50 disabled:pointer-events-none",
-                logged
-                  ? "bg-canvas border-rim text-ink-muted hover:bg-surface"
-                  : "bg-surface border-rim text-ink hover:bg-canvas",
-              ].join(" ")}
-              aria-pressed={logged}
-            >
-              {logPending
-                ? "Updating…"
-                : logged
-                ? "Logged to Splitwise"
-                : "Mark as logged"}
-            </button>
-
-            <Link
-              href={`/expenses/new/${expense.type === "ITEMIZED" ? "itemized" : "simple"}?edit=${expense.id}`}
-            >
-              <Button variant="secondary" size="sm">
-                Edit
-              </Button>
-            </Link>
-          </div>
-
-          {/* Delete */}
+      {/* ── Actions ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Link href={editHref}>
+          <Button variant="primary" size="sm">Edit</Button>
+        </Link>
+        <button
+          type="button"
+          onClick={handleToggleLogged}
+          disabled={logPending}
+          aria-pressed={logged}
+          className={[
+            "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
+            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun disabled:opacity-50",
+            logged ? "bg-mint hover:bg-mint-dim" : "bg-surface hover:bg-sun",
+          ].join(" ")}
+        >
+          {logged ? "✓ Logged in Splitwise" : "Mark as logged"}
+        </button>
+        <CopyButton summary={copySummary} />
+        <div className="ml-auto">
           {!deleteConfirm ? (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setDeleteConfirm(true)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(true)}>
               Delete
             </Button>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-ink-muted hidden sm:block">
-                Delete this expense?
-              </span>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                {deleting ? "Deleting…" : "Confirm"}
+              <span className="text-sm text-ink-muted">Delete for good?</span>
+              <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete"}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDeleteConfirm(false)}
-                disabled={deleting}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
                 Cancel
               </Button>
             </div>
           )}
         </div>
+      </div>
+      {deleteError && (
+        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
+          {deleteError}
+        </p>
+      )}
 
-        {deleteError && (
-          <p
-            className="mt-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
-            role="alert"
-          >
-            {deleteError}
+      {/* ── Who owes what ───────────────────────────────────────────────── */}
+      <section aria-labelledby="owes-heading">
+        <h2 id="owes-heading" className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          Who owes what
+        </h2>
+        <ul className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
+          {expense.breakdown.perPerson
+            .slice()
+            .sort((a, b) => Number(a.personId === expense.payerId) - Number(b.personId === expense.payerId))
+            .map(({ personId, cents }) => {
+              const person = resolvePerson(personId);
+              const name = person?.name ?? personId.slice(0, 8);
+              const isPayer = personId === expense.payerId;
+              return (
+                <li key={personId} className="flex items-center gap-3 px-5 py-3.5">
+                  {person ? (
+                    <PersonChip name={name} colorHex={person.colorHex} size="sm" readOnly />
+                  ) : (
+                    <span className="text-sm font-semibold">{name}</span>
+                  )}
+                  <span className="flex-1 text-sm text-ink-muted">
+                    {isPayer ? "paid · their own share" : `owes ${payerName}`}
+                  </span>
+                  <span
+                    className={[
+                      "tabular-nums",
+                      isPayer ? "text-sm text-ink-muted" : "font-display text-3xl",
+                    ].join(" ")}
+                  >
+                    {formatUSD(cents)}
+                  </span>
+                </li>
+              );
+            })}
+        </ul>
+      </section>
+
+      {/* ── Items (receipts only) ───────────────────────────────────────── */}
+      {expense.type === "ITEMIZED" && expense.items.length > 0 && (
+        <section aria-labelledby="items-heading">
+          <h2 id="items-heading" className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Items · {expense.items.length}
+          </h2>
+          <ul className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
+            {expense.items.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 px-5 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">
+                    {item.name}
+                    {item.quantity !== 1 && (
+                      <span className="font-normal text-ink-muted"> × {item.quantity}</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-ink-muted truncate">
+                    {item.assignments.length === expense.breakdown.perPerson.length &&
+                    expense.breakdown.perPerson.length > 1
+                      ? "Everyone"
+                      : item.assignments
+                          .map((a) => resolvePerson(a.personId)?.name ?? "?")
+                          .join(", ")}
+                  </p>
+                </div>
+                <span className="text-sm tabular-nums">{formatUSD(item.lineTotalCents)}</span>
+              </li>
+            ))}
+            {expense.taxCents > 0 && (
+              <li className="flex items-center gap-3 px-5 py-3 bg-mist">
+                <p className="flex-1 text-sm text-ink-muted">Tax, split by each person&apos;s items</p>
+                <span className="text-sm tabular-nums">{formatUSD(expense.taxCents)}</span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {/* ── Tags ────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="tags-heading" className="space-y-2">
+        <h2 id="tags-heading" className="px-1 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          Tags
+        </h2>
+        <TagPicker value={tags} onChange={handleTagsChange} />
+        {tagsError && (
+          <p className="text-xs text-danger" role="alert">
+            {tagsError}
           </p>
         )}
-      </Card>
+      </section>
     </div>
   );
 }
