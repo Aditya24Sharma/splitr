@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/components/Link";
+import { useRouterState } from "@tanstack/react-router";
 
 // Each section also owns the detail pages under these prefixes
 const NAV_LINKS = [
@@ -13,7 +11,7 @@ const NAV_LINKS = [
 ] as const;
 
 export default function AppNav() {
-  const pathname = usePathname();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-ink">

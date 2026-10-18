@@ -1,5 +1,3 @@
-"use client";
-
 import { PersonChip } from "@/components/PersonChip";
 
 export interface BulkAssignBarRow {
