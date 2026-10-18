@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
 import { TagPicker } from "@/components/TagPicker";
+import { SaveBar } from "@/components/SaveBar";
+import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
 import { expenseDay } from "@/lib/expense-filter";
@@ -91,8 +92,8 @@ export default function NewSimplePage({
   // Load people
   // ---------------------------------------------------------------------------
 
+  // peopleLoading starts true, so the effect only has to settle it
   useEffect(() => {
-    setPeopleLoading(true);
     Promise.all([
       fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
       editId ? loadSavedExpense(editId) : null,
@@ -303,7 +304,7 @@ export default function NewSimplePage({
     return (
       <div className="py-8 space-y-4">
         <p
-          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-4 py-3"
+          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
           {editLoadError}
@@ -321,21 +322,14 @@ export default function NewSimplePage({
 
   if (!peopleLoading && people.length === 0) {
     return (
-      <div className="space-y-6">
-        <h1 className="font-display text-3xl font-semibold text-ink">
-          New simple expense
-        </h1>
-        <Card padding="lg">
-          <div className="text-center space-y-4">
-            <p className="text-sm text-ink">
-              Add roommates first — you need at least one person to split an
-              expense with.
-            </p>
-            <Link href="/people">
-              <Button variant="primary">Add roommates</Button>
-            </Link>
-          </div>
-        </Card>
+      <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
+        <p className="font-display text-4xl uppercase">Add people first</p>
+        <p className="mt-3 text-sm text-ink-muted">
+          You need at least one person to split an expense with.
+        </p>
+        <Link href="/people" className="inline-block mt-6">
+          <Button variant="primary">Add people</Button>
+        </Link>
       </div>
     );
   }
@@ -345,87 +339,87 @@ export default function NewSimplePage({
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* Page heading */}
-      <div>
-        <h1 className="font-display text-3xl font-semibold text-ink">
-          {editId ? "Edit simple expense" : "New simple expense"}
+    <div className="space-y-9">
+      <header>
+        <Link
+          href={editId ? `/expenses/${editId}` : "/expenses/new"}
+          className="text-sm font-semibold text-ink-muted hover:text-ink"
+        >
+          ← {editId ? "Back to expense" : "New expense"}
+        </Link>
+        <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
+          {editId ? "Edit split" : "Quick split"}
         </h1>
-        <p className="mt-1.5 text-sm text-ink-muted">
-          {editId
-            ? "Saving clears “logged to Splitwise” so you remember to update it there."
-            : "Split a fixed total evenly or by exact amounts."}
-        </p>
+        {editId && (
+          <p className="mt-3 text-sm text-ink-muted">
+            Saving clears &ldquo;logged to Splitwise&rdquo; so you remember to update it there.
+          </p>
+        )}
+      </header>
+
+      {/* ── Amount ──────────────────────────────────────────────────────── */}
+      <label
+        htmlFor="amount-input"
+        className="block rounded-3xl border border-ink bg-sky px-6 pt-4 pb-5 focus-within:ring-4 focus-within:ring-sun"
+      >
+        <span className="text-xs font-semibold uppercase tracking-[0.08em]">Total</span>
+        <span className="mt-1 flex items-baseline gap-1 font-display text-6xl sm:text-7xl">
+          <span aria-hidden="true">$</span>
+          <input
+            id="amount-input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={amountDollars}
+            onChange={(e) => setAmountDollars(e.target.value)}
+            placeholder="0.00"
+            className="w-full min-w-0 bg-transparent outline-none placeholder:text-ink/25 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+        </span>
+      </label>
+
+      {/* ── What + when ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-4">
+        <Field label="What was it?" htmlFor="description-input">
+          <Input
+            id="description-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Dinner, gas, tickets…"
+          />
+        </Field>
+        <Field label="Date" htmlFor="date-input">
+          <Input
+            id="date-input"
+            type="date"
+            value={purchasedAt}
+            onChange={(e) => setPurchasedAt(e.target.value)}
+          />
+        </Field>
       </div>
 
-      {/* ── Description & Amount ─────────────────────────────────────────── */}
-      <Card padding="md">
-        <div className="space-y-4">
-          <Field label="Description" htmlFor="description-input">
-            <Input
-              id="description-input"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Dinner, groceries, utilities…"
-            />
-          </Field>
+      {/* ── Who paid ────────────────────────────────────────────────────── */}
+      <Section title="Who paid">
+        {peopleLoading ? (
+          <p className="text-sm text-ink-faint">Loading…</p>
+        ) : (
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
+            {people.map((p) => (
+              <PersonChip
+                key={p.id}
+                name={p.name}
+                colorHex={p.colorHex}
+                selected={payerId === p.id}
+                onClick={() => setPayerId(p.id)}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
 
-          <Field label="Tags" hint="Click to add or remove. Manage the list on the Tags page.">
-            <TagPicker value={tags} onChange={setTags} />
-          </Field>
-
-          <Field label="Date" htmlFor="date-input">
-            <Input
-              id="date-input"
-              type="date"
-              value={purchasedAt}
-              onChange={(e) => setPurchasedAt(e.target.value)}
-            />
-          </Field>
-
-          <Field label="Total amount ($)" htmlFor="amount-input">
-            <Input
-              id="amount-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={amountDollars}
-              onChange={(e) => setAmountDollars(e.target.value)}
-              placeholder="0.00"
-            />
-          </Field>
-        </div>
-      </Card>
-
-      {/* ── Payer ─────────────────────────────────────────────────────────── */}
-      <Card padding="md">
-        <Field label="Paid by" htmlFor="payer-select">
-          {peopleLoading ? (
-            <p className="text-sm text-ink-faint h-9 flex items-center">
-              Loading…
-            </p>
-          ) : (
-            <select
-              id="payer-select"
-              value={payerId}
-              onChange={(e) => setPayerId(e.target.value)}
-              className="w-full px-3 py-2 h-9 text-sm bg-surface text-ink rounded-lg border border-rim focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent transition-colors"
-            >
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-      </Card>
-
-      {/* ── Participants ──────────────────────────────────────────────────── */}
-      <Card padding="md">
-        <h2 className="text-sm font-semibold text-ink mb-3">
-          Participants
-        </h2>
+      {/* ── Who's in ────────────────────────────────────────────────────── */}
+      <Section title="Split between">
         {peopleLoading ? (
           <p className="text-sm text-ink-faint">Loading…</p>
         ) : (
@@ -442,179 +436,136 @@ export default function NewSimplePage({
           </div>
         )}
         {participantList.length === 0 && !peopleLoading && (
-          <p
-            className="mt-3 text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
-            role="alert"
-          >
-            Select at least one participant.
-          </p>
+          <p className="text-sm text-ink-muted">Tap everyone who shares this.</p>
         )}
-      </Card>
 
-      {/* ── Split method ──────────────────────────────────────────────────── */}
-      <Card padding="md">
-        <h2 className="text-sm font-semibold text-ink mb-3">Split method</h2>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setSplitMethod("EVEN")}
-            className={[
-              "px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors",
-              splitMethod === "EVEN"
-                ? "bg-accent text-white border-accent"
-                : "bg-surface text-ink border-rim hover:bg-canvas",
-            ].join(" ")}
-          >
-            Even
-          </button>
-          <button
-            type="button"
-            onClick={() => setSplitMethod("EXACT")}
-            className={[
-              "px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors",
-              splitMethod === "EXACT"
-                ? "bg-accent text-white border-accent"
-                : "bg-surface text-ink border-rim hover:bg-canvas",
-            ].join(" ")}
-          >
-            Exact
-          </button>
+        <div className="flex gap-1.5 pt-1" role="radiogroup" aria-label="Split method">
+          {(
+            [
+              ["EVEN", "Evenly"],
+              ["EXACT", "Exact amounts"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={splitMethod === value}
+              onClick={() => setSplitMethod(value)}
+              className={[
+                "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
+                splitMethod === value ? "bg-ink text-white" : "bg-surface hover:bg-sun",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Exact-amount inputs */}
         {splitMethod === "EXACT" && participantList.length > 0 && (
-          <div className="mt-4 space-y-3">
-            <p className="text-xs text-ink-muted">
-              Enter each person&apos;s exact share. They must sum to the total.
-            </p>
+          <div className="rounded-3xl border border-ink p-4 space-y-2.5">
             {participantList.map((p) => (
               <div key={p.id} className="flex items-center gap-3">
-                <PersonChip
-                  name={p.name}
-                  colorHex={p.colorHex}
-                  size="sm"
-                  readOnly
-                />
-                <div className="flex-1 max-w-[9rem]">
+                <div className="flex-1 min-w-0">
+                  <PersonChip name={p.name} colorHex={p.colorHex} size="sm" readOnly />
+                </div>
+                <div className="w-36">
                   <Input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="0.01"
                     placeholder="0.00"
                     value={exactAmounts[p.id] ?? ""}
                     onChange={(e) => setExactAmount(p.id, e.target.value)}
                     aria-label={`${p.name}'s share`}
+                    className="text-right tabular-nums"
                   />
                 </div>
               </div>
             ))}
 
-            {/* Running sum vs total */}
-            {totalCents > 0 && exactHasAllAmounts && (
-              <div
+            {totalCents > 0 && (
+              <p
                 className={[
-                  "flex justify-between text-sm px-3 py-2 rounded-lg border",
-                  exactSumMatchesTotal
-                    ? "border-rim bg-canvas text-ink"
-                    : "border-danger/20 bg-danger-dim text-danger",
+                  "pt-2 border-t border-rim text-sm flex justify-between",
+                  exactHasAllAmounts && !exactSumMatchesTotal ? "text-danger font-semibold" : "text-ink-muted",
                 ].join(" ")}
                 role="status"
               >
                 <span>
-                  {exactSumMatchesTotal ? "Sums correctly" : "Sum so far"}
+                  {!exactHasAllAmounts
+                    ? "Enter an amount for everyone"
+                    : exactSumMatchesTotal
+                      ? "✓ Adds up"
+                      : exactSumCents < totalCents
+                        ? `${formatUSD(totalCents - exactSumCents)} short`
+                        : `${formatUSD(exactSumCents - totalCents)} over`}
                 </span>
-                <span className="font-semibold tabular-nums">
-                  {formatUSD(exactSumCents)}
-                  {!exactSumMatchesTotal && (
-                    <span className="font-normal text-ink-muted ml-1">
-                      / {formatUSD(totalCents)}
-                    </span>
-                  )}
+                <span className="tabular-nums">
+                  {formatUSD(exactSumCents)} / {formatUSD(totalCents)}
                 </span>
-              </div>
-            )}
-
-            {totalCents > 0 && !exactHasAllAmounts && (
-              <p
-                className="text-sm text-ink-muted bg-canvas border border-rim rounded-lg px-3 py-2"
-                role="status"
-              >
-                Enter an amount for every participant.
-              </p>
-            )}
-
-            {totalCents > 0 && !exactSumMatchesTotal && exactHasAllAmounts && (
-              <p
-                className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
-                role="alert"
-              >
-                Amounts must sum to {formatUSD(totalCents)} (
-                {exactSumCents < totalCents
-                  ? `${formatUSD(totalCents - exactSumCents)} short`
-                  : `${formatUSD(exactSumCents - totalCents)} over`}
-                ).
               </p>
             )}
           </div>
         )}
-      </Card>
+      </Section>
 
-      {/* ── Live breakdown ─────────────────────────────────────────────────── */}
+      {/* ── Live breakdown ──────────────────────────────────────────────── */}
       {liveBreakdown && liveBreakdown.length > 0 && (
-        <Card padding="md">
-          <h3 className="text-sm font-semibold text-ink mb-3">Breakdown</h3>
-          <div className="space-y-2">
+        <Section title="Each share">
+          <ul className="rounded-3xl bg-mist divide-y divide-rim">
             {liveBreakdown.map(({ personId, cents }) => {
               const person = personById.get(personId);
               if (!person) return null;
               return (
-                <div
-                  key={personId}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span className="text-ink">
-                    {person.name}
-                    {personId === payerId && (
-                      <span className="ml-1.5 text-xs font-medium text-ink-muted">
-                        (payer)
-                      </span>
-                    )}
+                <li key={personId} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <span>
+                    <span className="font-semibold">{person.name}</span>
+                    {personId === payerId && <span className="text-ink-muted"> · paid</span>}
                   </span>
-                  <span className="font-semibold tabular-nums text-ink">
-                    {formatUSD(cents)}
-                  </span>
-                </div>
+                  <span className="font-display text-2xl tabular-nums">{formatUSD(cents)}</span>
+                </li>
               );
             })}
-          </div>
-          <div className="mt-3 pt-3 border-t border-rim flex justify-between text-sm font-semibold">
-            <span>Total</span>
-            <span className="tabular-nums">{formatUSD(totalCents)}</span>
-          </div>
-        </Card>
+          </ul>
+        </Section>
       )}
 
-      {/* ── Save error ────────────────────────────────────────────────────── */}
+      {/* ── Tags ────────────────────────────────────────────────────────── */}
+      <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
+        <TagPicker value={tags} onChange={setTags} />
+      </Section>
+
       {saveError && (
         <p
-          className="text-sm text-danger bg-danger-dim border border-danger/20 rounded-lg px-3 py-2"
+          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
           role="alert"
         >
           {saveError}
         </p>
       )}
 
-      {/* ── Action bar ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="primary" onClick={handleSave} disabled={!canSave}>
-          {saving ? "Saving…" : editId ? "Save changes" : "Save expense"}
-        </Button>
-        <Link href={editId ? `/expenses/${editId}` : "/"}>
-          <Button variant="ghost" size="sm">
-            Cancel
-          </Button>
-        </Link>
-      </div>
+      <SaveBar
+        summary={
+          totalCents > 0 ? (
+            <>
+              <span className="font-semibold tabular-nums">{formatUSD(totalCents)}</span>
+              <span className="text-ink-muted">
+                {" "}· {participantList.length} {participantList.length === 1 ? "person" : "people"}
+              </span>
+            </>
+          ) : (
+            <span className="text-ink-muted">Enter a total to save</span>
+          )
+        }
+        saveLabel={editId ? "Save changes" : "Save"}
+        canSave={canSave}
+        saving={saving}
+        onSave={handleSave}
+        cancelHref={editId ? `/expenses/${editId}` : "/"}
+      />
     </div>
   );
 }
