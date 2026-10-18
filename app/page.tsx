@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -130,6 +130,7 @@ export default function HomePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   // Every tag on the Tags page (for bulk tagging), not just ones in use
   const [tagList, setTagList] = useState<string[]>([]);
 
@@ -304,6 +305,25 @@ export default function HomePage() {
       });
   }, []);
 
+  // "/" jumps to search; Esc closes the filter panel (the selection bar
+  // handles Esc itself while anything is ticked)
+  const hasSelection = selectedExpenses.length > 0;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const typing =
+        target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === "Escape" && !hasSelection) {
+        setFiltersOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasSelection]);
+
   // Save only once loaded, so the defaults never overwrite what was restored
   useEffect(() => {
     if (loadState !== "ready") return;
@@ -389,13 +409,22 @@ export default function HomePage() {
                 <path d="M13 13l4 4" strokeLinecap="round" />
               </svg>
               <Input
+                ref={searchRef}
                 type="search"
                 value={filters.query}
                 onChange={(e) => setFilter("query", e.target.value)}
                 placeholder="Search expenses or items"
                 aria-label="Search expenses and items by name"
-                className="pl-10"
+                className="pl-10 sm:pr-12"
               />
+              {!filters.query && (
+                <kbd
+                  aria-hidden="true"
+                  className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 items-center justify-center rounded-md border border-rim text-xs font-semibold text-ink-muted pointer-events-none"
+                >
+                  /
+                </kbd>
+              )}
             </div>
             <Button
               variant={filtersOpen ? "primary" : "secondary"}

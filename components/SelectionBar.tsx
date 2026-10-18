@@ -5,7 +5,7 @@
  * One row of actions; "Settle up" and "Tag" open a panel above that row.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { formatUSD } from "@/lib/money";
@@ -46,6 +46,17 @@ export function SelectionBar({
   const count = selected.length;
   const totalCents = selected.reduce((sum, e) => sum + e.totalCents, 0);
   const allLogged = selected.every((e) => e.loggedToSplitwise);
+
+  // Esc closes the open panel first, then clears the selection
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (panel !== "none") setPanel("none");
+      else onClear();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel, onClear]);
 
   function toggle(p: Panel) {
     setPanel((cur) => (cur === p ? "none" : p));
