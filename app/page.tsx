@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { SelectionBar } from "@/components/SelectionBar";
+import { PersonChip } from "@/components/PersonChip";
 import { formatUSD } from "@/lib/money";
 import { settleExpenses } from "@/lib/settle";
 import {
@@ -60,9 +61,6 @@ function shortDate(day: string): string {
 function monthLabel(day: string): string {
   return localDate(day).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
-
-const SELECT_CLASS =
-  "w-full px-4 h-10 text-sm bg-surface text-ink rounded-full border border-ink focus:outline-none focus:ring-4 focus:ring-sun/70";
 
 /** A round tick box; a real button so it works with the keyboard */
 function Tick({
@@ -164,18 +162,18 @@ export default function HomePage() {
       clear: () => setFilters((f) => ({ ...f, from: "", to: "" })),
     });
   }
-  if (filters.personId) {
+  for (const id of filters.personIds) {
     activePills.push({
-      key: "person",
-      label: `With ${personName(filters.personId)}`,
-      clear: () => setFilter("personId", ""),
+      key: `person-${id}`,
+      label: `With ${personName(id)}`,
+      clear: () => toggleIn("personIds", id),
     });
   }
-  if (filters.payerId) {
+  for (const id of filters.payerIds) {
     activePills.push({
-      key: "payer",
-      label: `Paid by ${personName(filters.payerId)}`,
-      clear: () => setFilter("payerId", ""),
+      key: `payer-${id}`,
+      label: `Paid by ${personName(id)}`,
+      clear: () => toggleIn("payerIds", id),
     });
   }
   if (filters.logged !== "all") {
@@ -209,13 +207,18 @@ export default function HomePage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleFilterTag(tag: string) {
+  /** Adds or removes one value in a list-valued filter */
+  function toggleIn(key: "tags" | "personIds" | "payerIds", value: string) {
     setFilters((prev) => ({
       ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter((t) => t !== tag)
-        : [...prev.tags, tag],
+      [key]: prev[key].includes(value)
+        ? prev[key].filter((v) => v !== value)
+        : [...prev[key], value],
     }));
+  }
+
+  function toggleFilterTag(tag: string) {
+    toggleIn("tags", tag);
   }
 
   /** Runs a bulk action on the ticked expenses, then reloads the list */
@@ -379,37 +382,32 @@ export default function HomePage() {
                     onChange={(e) => setFilter("to", e.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-1.5 text-xs font-semibold">
-                  Includes
-                  <select
-                    value={filters.personId}
-                    onChange={(e) => setFilter("personId", e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">Anyone</option>
-                    {people.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1.5 text-xs font-semibold">
-                  Paid by
-                  <select
-                    value={filters.payerId}
-                    onChange={(e) => setFilter("payerId", e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">Anyone</option>
-                    {people.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
+
+              {(
+                [
+                  ["personIds", "Includes", "everyone picked"],
+                  ["payerIds", "Paid by", "any of them"],
+                ] as const
+              ).map(([key, title, rule]) => (
+                <div key={key} className="space-y-1.5">
+                  <p className="text-xs font-semibold">
+                    {title} <span className="font-normal text-ink-muted">· {rule}</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {people.map((p) => (
+                      <PersonChip
+                        key={p.id}
+                        name={p.name}
+                        colorHex={p.colorHex}
+                        size="sm"
+                        selected={filters[key].includes(p.id)}
+                        onClick={() => toggleIn(key, p.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
 
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold">Splitwise</p>
@@ -439,7 +437,9 @@ export default function HomePage() {
 
               {allTags.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold">Tags (any)</p>
+                  <p className="text-xs font-semibold">
+                    Tags <span className="font-normal text-ink-muted">· any of them</span>
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     {allTags.map((tag) => {
                       const on = filters.tags.includes(tag);

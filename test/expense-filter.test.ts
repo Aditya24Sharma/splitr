@@ -70,13 +70,19 @@ describe('filterExpenses', () => {
   })
 
   it('filters by a person who paid or has a share', () => {
-    expect(ids(run({ personId: 'A' }))).toEqual(['tw', 'w'])
-    expect(ids(run({ personId: 'C' }))).toEqual(['d'])
-    expect(ids(run({ personId: 'B' }))).toEqual(['tw', 'd', 'w'])
+    expect(ids(run({ personIds: ['A'] }))).toEqual(['tw', 'w'])
+    expect(ids(run({ personIds: ['C'] }))).toEqual(['d'])
+    expect(ids(run({ personIds: ['B'] }))).toEqual(['tw', 'd', 'w'])
   })
 
-  it('filters by who paid', () => {
-    expect(ids(run({ payerId: 'C' }))).toEqual(['d'])
+  it('with several people, keeps only expenses ALL of them are in', () => {
+    expect(ids(run({ personIds: ['B', 'C'] }))).toEqual(['d'])
+    expect(ids(run({ personIds: ['A', 'C'] }))).toEqual([])
+  })
+
+  it('filters by who paid, matching ANY of the payers picked', () => {
+    expect(ids(run({ payerIds: ['C'] }))).toEqual(['d'])
+    expect(ids(run({ payerIds: ['A', 'C'] }))).toEqual(['tw', 'd', 'w'])
   })
 
   it('filters by Splitwise status', () => {
@@ -86,6 +92,6 @@ describe('filterExpenses', () => {
 
   it('combines filters', () => {
     expect(ids(run({ tags: ['trip to x'], query: 'milk' }))).toEqual([])
-    expect(ids(run({ personId: 'A', logged: 'not-logged' }))).toEqual(['w'])
+    expect(ids(run({ personIds: ['A'], logged: 'not-logged' }))).toEqual(['w'])
   })
 })

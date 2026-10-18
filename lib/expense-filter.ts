@@ -20,10 +20,10 @@ export interface ExpenseFilters {
   /** Inclusive YYYY-MM-DD bounds; '' = open-ended */
   from: string
   to: string
-  /** Someone who paid or has a share; '' = anyone */
-  personId: string
-  /** '' = anyone */
-  payerId: string
+  /** Keep expenses that ALL of these people paid for or share in; empty = anyone */
+  personIds: string[]
+  /** Keep expenses paid by ANY of these people; empty = anyone */
+  payerIds: string[]
   logged: 'all' | 'logged' | 'not-logged'
 }
 
@@ -32,8 +32,8 @@ export const NO_FILTERS: ExpenseFilters = {
   query: '',
   from: '',
   to: '',
-  personId: '',
-  payerId: '',
+  personIds: [],
+  payerIds: [],
   logged: 'all',
 }
 
@@ -68,11 +68,12 @@ export function filterExpenses<T extends FilterableExpense>(
     if (f.from && day < f.from) continue
     if (f.to && day > f.to) continue
 
-    if (f.payerId && expense.payerId !== f.payerId) continue
+    if (f.payerIds.length > 0 && !f.payerIds.includes(expense.payerId)) continue
     if (
-      f.personId &&
-      expense.payerId !== f.personId &&
-      !expense.breakdown.perPerson.some(p => p.personId === f.personId)
+      f.personIds.length > 0 &&
+      !f.personIds.every(
+        id => expense.payerId === id || expense.breakdown.perPerson.some(p => p.personId === id),
+      )
     ) continue
 
     if (f.logged === 'logged' && !expense.loggedToSplitwise) continue
