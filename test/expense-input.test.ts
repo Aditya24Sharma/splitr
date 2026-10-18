@@ -58,6 +58,15 @@ describe('parseExpenseInput', () => {
     expect(parseExpenseInput(body)).toEqual({ error: 'exact split must sum to total' })
   })
 
+  it('saves a date on a simple expense, and rejects a bad one', () => {
+    const r = parseExpenseInput({ ...simple, purchasedAt: '2026-10-15' })
+    if ('error' in r) throw new Error(r.error)
+    expect(expenseFields(r.input)).toMatchObject({ purchasedAt: new Date('2026-10-15') })
+    expect(parseExpenseInput({ ...simple, purchasedAt: 'next tuesday' })).toEqual({
+      error: 'purchasedAt must be a date like 2026-10-18',
+    })
+  })
+
   it('rejects missing fields and unknown types', () => {
     expect(parseExpenseInput({ ...simple, description: '' })).toEqual({ error: 'description is required' })
     expect(parseExpenseInput({ ...itemized, payerId: undefined })).toEqual({ error: 'payerId is required' })

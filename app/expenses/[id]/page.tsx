@@ -9,6 +9,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { PersonChip } from "@/components/PersonChip";
 import { TagPicker } from "@/components/TagPicker";
 import { formatUSD } from "@/lib/money";
+import { expenseDay } from "@/lib/expense-filter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,8 +47,9 @@ interface Expense {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+/** day is YYYY-MM-DD; read as a local date so it never shifts a day */
+function formatDate(day: string): string {
+  return new Date(`${day}T00:00`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -292,7 +294,7 @@ export default function ExpenseDetailPage({
           {label}
         </h1>
         <p className="mt-1 text-sm text-ink-muted">
-          {formatDate(expense.createdAt)}
+          {formatDate(expenseDay(expense))}
           {expense.type === "ITEMIZED" ? " · Itemized" : " · Simple split"}
         </p>
       </div>

@@ -10,6 +10,7 @@ import { PersonChip } from "@/components/PersonChip";
 import { TagPicker } from "@/components/TagPicker";
 import { toCents, formatUSD } from "@/lib/money";
 import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
+import { expenseDay } from "@/lib/expense-filter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +30,8 @@ type SplitMethod = "EVEN" | "EXACT";
 interface SavedExpense {
   type: "ITEMIZED" | "SIMPLE";
   description: string;
+  purchasedAt: string | null;
+  createdAt: string;
   totalCents: number;
   payerId: string;
   splitMethod: SplitMethod | "ITEMIZED";
@@ -68,6 +71,10 @@ export default function NewSimplePage({
   // Form state
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  // YYYY-MM-DD; defaults to today
+  const [purchasedAt, setPurchasedAt] = useState(() =>
+    expenseDay({ purchasedAt: null, createdAt: new Date().toISOString() })
+  );
   const [amountDollars, setAmountDollars] = useState("");
   const [payerId, setPayerId] = useState("");
   const [participantIds, setParticipantIds] = useState<Set<string>>(new Set());
@@ -101,6 +108,7 @@ export default function NewSimplePage({
           }
           setDescription(saved.description);
           setTags(saved.tags);
+          setPurchasedAt(expenseDay(saved));
           setAmountDollars((saved.totalCents / 100).toFixed(2));
           setPayerId(saved.payerId);
           setParticipantIds(new Set(saved.participants.map((p) => p.personId)));
@@ -248,6 +256,7 @@ export default function NewSimplePage({
     const payload = {
       type: "SIMPLE" as const,
       description: description.trim(),
+      purchasedAt,
       tags,
       payerId,
       totalCents,
@@ -363,6 +372,15 @@ export default function NewSimplePage({
 
           <Field label="Tags" hint="Click to add or remove. Manage the list on the Tags page.">
             <TagPicker value={tags} onChange={setTags} />
+          </Field>
+
+          <Field label="Date" htmlFor="date-input">
+            <Input
+              id="date-input"
+              type="date"
+              value={purchasedAt}
+              onChange={(e) => setPurchasedAt(e.target.value)}
+            />
           </Field>
 
           <Field label="Total amount ($)" htmlFor="amount-input">

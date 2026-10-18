@@ -29,6 +29,7 @@ export type ExpenseInput =
       type: 'SIMPLE'
       payerId: string
       description: string
+      purchasedAt: Date | null
       totalCents: number
       splitMethod: 'EVEN' | 'EXACT'
       tags: string[]
@@ -43,8 +44,11 @@ export function parseExpenseInput(body: any): { input: ExpenseInput } | { error:
   const tags = body?.tags === undefined ? [] : parseTags(body.tags)
   if (tags === null) return { error: 'tags must be an array of strings' }
 
+  const purchasedAt = parseDate(body?.purchasedAt)
+  if (purchasedAt === undefined) return { error: 'purchasedAt must be a date like 2026-10-18' }
+
   if (type === 'ITEMIZED') {
-    const { store, purchasedAt, payerId, taxCents, items } = body
+    const { store, payerId, taxCents, items } = body
 
     if (!payerId || typeof payerId !== 'string') return { error: 'payerId is required' }
     if (!Array.isArray(items) || items.length === 0) return { error: 'items must be a non-empty array' }
@@ -80,7 +84,7 @@ export function parseExpenseInput(body: any): { input: ExpenseInput } | { error:
         type: 'ITEMIZED',
         payerId,
         store: store ?? null,
-        purchasedAt: purchasedAt ? new Date(purchasedAt) : null,
+        purchasedAt,
         taxCents,
         totalCents,
         tags,
@@ -116,11 +120,28 @@ export function parseExpenseInput(body: any): { input: ExpenseInput } | { error:
     if (error) return { error }
 
     return {
-      input: { type: 'SIMPLE', payerId, description, totalCents, splitMethod, tags, participants: cleanParticipants },
+      input: {
+        type: 'SIMPLE',
+        payerId,
+        description,
+        purchasedAt,
+        totalCents,
+        splitMethod,
+        tags,
+        participants: cleanParticipants,
+      },
     }
   }
 
   return { error: 'type must be ITEMIZED or SIMPLE' }
+}
+
+/** Blank = no date (null); a valid date string = Date; anything else = undefined (invalid). */
+function parseDate(value: unknown): Date | null | undefined {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string') return undefined
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? undefined : d
 }
 
 /** Runs the split engine on a prospective expense; returns its error message, if any. */
@@ -151,6 +172,7 @@ export function expenseFields(input: ExpenseInput) {
     type: 'SIMPLE' as const,
     splitMethod: input.splitMethod,
     description: input.description,
+    purchasedAt: input.purchasedAt,
     payerId: input.payerId,
     subtotalCents: input.totalCents,
     taxCents: 0,

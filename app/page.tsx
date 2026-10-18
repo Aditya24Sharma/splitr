@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { formatUSD } from "@/lib/money";
 import { settleExpenses } from "@/lib/settle";
-import { filterExpenses } from "@/lib/expense-filter";
+import {
+  filterExpenses,
+  expenseDay,
+  NO_FILTERS,
+  type ExpenseFilters,
+} from "@/lib/expense-filter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +35,7 @@ interface ExpenseListItem {
   payerId: string;
   payer: Person;
   loggedToSplitwise: boolean;
+  purchasedAt: string | null;
   createdAt: string;
   tags: string[];
   itemNames: string[];
@@ -42,8 +48,9 @@ interface ExpenseListItem {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
+/** day is YYYY-MM-DD; read as a local date so it never shifts a day */
+function formatDate(day: string): string {
+  const d = new Date(`${day}T00:00`);
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -51,6 +58,9 @@ function formatDate(iso: string): string {
       d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
   });
 }
+
+const SELECT_CLASS =
+  "w-full px-2 h-9 text-sm bg-surface text-ink rounded-lg border border-rim focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -64,8 +74,7 @@ export default function HomePage() {
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [filterTags, setFilterTags] = useState<string[]>([]);
-  const [itemQuery, setItemQuery] = useState("");
+  const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -77,9 +86,10 @@ export default function HomePage() {
     [expenses],
   );
   const visible = useMemo(
-    () => filterExpenses(expenses, filterTags, itemQuery),
-    [expenses, filterTags, itemQuery]
+    () => filterExpenses(expenses, filters),
+    [expenses, filters]
   );
+  const filtersActive = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
   // Only ticked expenses that are currently shown count toward the summary
   const selectedExpenses = useMemo(
     () => visible.map((m) => m.expense).filter((e) => selectedIds.has(e.id)),
@@ -109,9 +119,16 @@ export default function HomePage() {
     });
   }
 
+  function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
   function toggleFilterTag(tag: string) {
-    setFilterTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    setFilter(
+      "tags",
+      filters.tags.includes(tag)
+        ? filters.tags.filter((t) => t !== tag)
+        : [...filters.tags, tag]
     );
   }
 
@@ -220,21 +237,83 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* ── Search + tag filter ─────────────────────────────────────────── */}
+      {/* ── Search + filters ────────────────────────────────────────────── */}
       {loadState === "ready" && expenses.length > 0 && (
         <div className="space-y-3">
           <Input
             type="search"
-            value={itemQuery}
-            onChange={(e) => setItemQuery(e.target.value)}
+            value={filters.query}
+            onChange={(e) => setFilter("query", e.target.value)}
             placeholder="Search expenses or items, e.g. gas or milk"
             aria-label="Search expenses and items by name"
           />
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <label className="flex flex-col gap-1 text-xs text-ink-muted">
+              From
+              <Input
+                type="date"
+                value={filters.from}
+                onChange={(e) => setFilter("from", e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-muted">
+              To
+              <Input
+                type="date"
+                value={filters.to}
+                onChange={(e) => setFilter("to", e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-muted">
+              Person
+              <select
+                value={filters.personId}
+                onChange={(e) => setFilter("personId", e.target.value)}
+                className={SELECT_CLASS}
+              >
+                <option value="">Anyone</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-muted">
+              Paid by
+              <select
+                value={filters.payerId}
+                onChange={(e) => setFilter("payerId", e.target.value)}
+                className={SELECT_CLASS}
+              >
+                <option value="">Anyone</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-muted">
+              Splitwise
+              <select
+                value={filters.logged}
+                onChange={(e) =>
+                  setFilter("logged", e.target.value as ExpenseFilters["logged"])
+                }
+                className={SELECT_CLASS}
+              >
+                <option value="all">All</option>
+                <option value="not-logged">Not logged</option>
+                <option value="logged">Logged</option>
+              </select>
+            </label>
+          </div>
           {allTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-ink-muted mr-1">Tags:</span>
               {allTags.map((tag) => {
-                const on = filterTags.includes(tag);
+                const on = filters.tags.includes(tag);
                 return (
                   <button
                     key={tag}
@@ -252,15 +331,20 @@ export default function HomePage() {
                   </button>
                 );
               })}
-              {filterTags.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilterTags([])}
-                  className="text-xs text-ink-muted hover:text-ink ml-1"
-                >
-                  Clear tags
-                </button>
-              )}
+            </div>
+          )}
+          {filtersActive && (
+            <div className="flex items-center gap-3 text-xs text-ink-muted">
+              <span>
+                Showing {visible.length} of {expenses.length} expenses
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters(NO_FILTERS)}
+                className="hover:text-ink underline"
+              >
+                Clear filters
+              </button>
             </div>
           )}
         </div>
@@ -366,7 +450,7 @@ export default function HomePage() {
                       {/* Left: date */}
                       <div className="shrink-0 w-12 text-center">
                         <p className="text-xs text-ink-faint tabular-nums">
-                          {formatDate(exp.createdAt)}
+                          {formatDate(expenseDay(exp))}
                         </p>
                       </div>
 
