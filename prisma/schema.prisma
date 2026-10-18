@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ExpenseType {
+  ITEMIZED
+  SIMPLE
+}
+
+enum SplitMethod {
+  EVEN
+  EXACT
+  ITEMIZED
+}
+
+model Person {
+  id        String   @id @default(cuid())
+  name      String
+  colorHex  String   @default("#64748b")
+  isDefault Boolean  @default(false)
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  paidExpenses    Expense[]            @relation("payer")
+  itemAssignments ItemAssignment[]
+  participations  ExpenseParticipant[]
+}
+
+model Expense {
+  id                  String      @id @default(cuid())
+  type                ExpenseType
+  description         String      @default("")
+  store               String?
+  purchasedAt         DateTime?
+  payerId             String
+  payer               Person      @relation("payer", fields: [payerId], references: [id])
+  subtotalCents       Int         @default(0)
+  taxCents            Int         @default(0)
+  totalCents          Int
+  splitMethod         SplitMethod
+  loggedToSplitwise   Boolean     @default(false)
+  imagePath           String?
+  createdAt           DateTime    @default(now())
+
+  items        Item[]
+  participants ExpenseParticipant[]
+}
+
+model Item {
+  id             String  @id @default(cuid())
+  expenseId      String
+  expense        Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  rawName        String?
+  name           String
+  quantity       Float   @default(1)
+  unitPriceCents Int
+  lineTotalCents Int
+  sortOrder      Int
+
+  assignments ItemAssignment[]
+}
+
+model ItemAssignment {
+  itemId   String
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id])
+
+  @@id([itemId, personId])
+}
+
+model ExpenseParticipant {
+  expenseId        String
+  expense          Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  personId         String
+  person           Person  @relation(fields: [personId], references: [id])
+  exactAmountCents Int?
+
+  @@id([expenseId, personId])
+}

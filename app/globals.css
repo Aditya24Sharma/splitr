@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  /* Canvas & surface */
+  --color-canvas: #F8F6F2;
+  --color-surface: #FFFFFF;
+
+  /* Borders */
+  --color-rim: #E2DDD7;
+  --color-rim-strong: #C5BEB5;
+
+  /* Text */
+  --color-ink: #1C1A17;
+  --color-ink-muted: #68625A;
+  --color-ink-faint: #A89F95;
+
+  /* Brand accent — terracotta */
+  --color-accent: #B55A28;
+  --color-accent-dim: #F4EBE4;
+  --color-accent-hover: #9E4F23;
+
+  /* Destructive */
+  --color-danger: #A82828;
+  --color-danger-dim: #FAECEC;
+
+  /* Fonts */
+  --font-display: var(--font-lora), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure color inputs look consistent */
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
