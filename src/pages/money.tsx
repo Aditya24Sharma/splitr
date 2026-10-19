@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -16,6 +17,7 @@ import {
   todayLocal,
 } from "@/lib/spending";
 import { txLabel, type TxView } from "@/lib/transactions";
+import { accountsQuery, transactionsQuery, useRefreshAll } from "../queries";
 import {
   accountLabel,
   indexAccounts,
@@ -70,11 +72,14 @@ function readMoneyState(): Partial<SavedMoneyState> | null {
   }
 }
 
-async function fetchMoney(): Promise<[TxView[], AccountsResponse]> {
-  const [txRes, bankRes] = await Promise.all([fetch("/api/transactions"), fetch("/api/accounts")]);
-  if (!txRes.ok) throw new Error(`Failed to load transactions (HTTP ${txRes.status})`);
-  if (!bankRes.ok) throw new Error(`Failed to load banks (HTTP ${bankRes.status})`);
-  return Promise.all([txRes.json() as Promise<TxView[]>, bankRes.json() as Promise<AccountsResponse>]);
+const NO_TXS: TxView[] = [];
+const NO_BANKS: AccountsResponse = { plaidConfigured: false, items: [] };
+
+/** The month to open on: this one, or the newest with activity if this one is empty. */
+function defaultMonth(txs: TxView[]): string {
+  const current = todayLocal().slice(0, 7);
+  if (txs.length === 0 || txs.some((t) => t.date.startsWith(current))) return current;
+  return txs[0].date.slice(0, 7);
 }
 
 // ---------------------------------------------------------------------------
@@ -82,52 +87,23 @@ async function fetchMoney(): Promise<[TxView[], AccountsResponse]> {
 // ---------------------------------------------------------------------------
 
 export default function MoneyPage() {
-  const [txs, setTxs] = useState<TxView[]>([]);
-  const [banks, setBanks] = useState<AccountsResponse>({ plaidConfigured: false, items: [] });
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">("loading");
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const txQuery = useQuery(transactionsQuery);
+  const bankQuery = useQuery(accountsQuery);
+  const refreshAll = useRefreshAll();
+  const txs = txQuery.data ?? NO_TXS;
+  const banks = bankQuery.data ?? NO_BANKS;
+  const loadError = txQuery.error ?? bankQuery.error;
+  const loadState = loadError ? "error" : txQuery.data && bankQuery.data ? "ready" : "loading";
 
-  const [month, setMonth] = useState(() => todayLocal().slice(0, 7));
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string | null>(null);
-  const [show, setShow] = useState<Show>("all");
+  // Restored when coming back to the page; only a saved month brings filters
+  const [saved] = useState(readMoneyState);
+  const [pickedMonth, setPickedMonth] = useState<string | null>(saved?.month ?? null);
+  const [query, setQuery] = useState(saved?.month ? (saved.query ?? "") : "");
+  const [category, setCategory] = useState<string | null>(saved?.month ? (saved.category ?? null) : null);
+  const [show, setShow] = useState<Show>(saved?.month ? (saved.show ?? "all") : "all");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const reload = useCallback(() => {
-    fetchMoney()
-      .then(([txData, bankData]) => {
-        setTxs(txData);
-        setBanks(bankData);
-      })
-      .catch(() => {});
-  }, []);
-
-  // loadState starts as "loading", so the effect only has to settle it
-  useEffect(() => {
-    fetchMoney()
-      .then(([txData, bankData]) => {
-        setTxs(txData);
-        setBanks(bankData);
-        const saved = readMoneyState();
-        if (saved?.month) {
-          setMonth(saved.month);
-          setQuery(saved.query ?? "");
-          setCategory(saved.category ?? null);
-          setShow(saved.show ?? "all");
-        } else if (txData.length > 0) {
-          // Open on the newest month with activity, not an empty one
-          const current = todayLocal().slice(0, 7);
-          const newest = txData[0].date.slice(0, 7);
-          if (!txData.some((t) => t.date.startsWith(current))) setMonth(newest);
-        }
-        setLoadState("ready");
-      })
-      .catch((err) => {
-        setLoadError(err instanceof Error ? err.message : "An unexpected error occurred.");
-        setLoadState("error");
-      });
-  }, []);
+  const month = pickedMonth ?? defaultMonth(txs);
 
   // Save only once loaded, so the defaults never overwrite what was restored
   useEffect(() => {
@@ -209,7 +185,7 @@ export default function MoneyPage() {
               <Button variant="primary">+ Add expense</Button>
             </Link>
             {hasBanks && (
-              <SyncButton onSynced={reload} />
+              <SyncButton onSynced={refreshAll} />
             )}
             {synced && (
               <span className="text-sm text-ink-muted">Banks updated {timeAgo(synced)}</span>
@@ -225,8 +201,8 @@ export default function MoneyPage() {
           className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          <span className="flex-1">{loadError}</span>
-          <Button variant="danger" size="sm" onClick={() => window.location.reload()}>
+          <span className="flex-1">{loadError?.message}</span>
+          <Button variant="danger" size="sm" onClick={() => refreshAll()}>
             Retry
           </Button>
         </div>
@@ -259,7 +235,7 @@ export default function MoneyPage() {
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => setMonth((m) => shiftMonth(m, -1))}
+                  onClick={() => setPickedMonth(shiftMonth(month, -1))}
                   disabled={month <= oldestMonth}
                   aria-label="Previous month"
                   className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
@@ -269,7 +245,7 @@ export default function MoneyPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.08em]">{monthName(month)}</p>
                 <button
                   type="button"
-                  onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                  onClick={() => setPickedMonth(shiftMonth(month, 1))}
                   disabled={month >= thisMonth}
                   aria-label="Next month"
                   className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"

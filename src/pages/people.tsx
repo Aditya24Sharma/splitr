@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useId } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { peopleQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
@@ -90,15 +92,17 @@ function ColorPicker({ value, onChange, id }: ColorPickerProps) {
 // Page
 // ---------------------------------------------------------------------------
 
+const NO_PEOPLE: Person[] = [];
+
 export default function PeoplePage() {
   const addNameId = useId();
   const addColorId = useId();
 
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">(
-    "loading"
-  );
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const peopleResult = useQuery(peopleQuery);
+  const refreshAll = useRefreshAll();
+  const people = peopleResult.data ?? NO_PEOPLE;
+  const loadError = peopleResult.error;
+  const loadState = loadError ? "error" : peopleResult.data ? "ready" : "loading";
 
   // ---- Add form ----
   const [addName, setAddName] = useState("");
@@ -122,33 +126,6 @@ export default function PeoplePage() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archivePending, setArchivePending] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Fetch
-  // ---------------------------------------------------------------------------
-
-  const fetchPeople = useCallback(async () => {
-    setLoadState("loading");
-    setLoadError(null);
-    try {
-      const res = await fetch("/api/people");
-      if (!res.ok) {
-        throw new Error(`Failed to load people (HTTP ${res.status})`);
-      }
-      const data: Person[] = await res.json();
-      setPeople(data);
-      setLoadState("ready");
-    } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "An unexpected error occurred."
-      );
-      setLoadState("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPeople();
-  }, [fetchPeople]);
 
   // ---------------------------------------------------------------------------
   // Add
@@ -182,7 +159,7 @@ export default function PeoplePage() {
       setAddColor(pickRandomColor());
       setAddDefault(false);
       setAddNameTouched(false);
-      await fetchPeople();
+      await refreshAll();
     } catch (err) {
       setAddError(
         err instanceof Error ? err.message : "Failed to add person."
@@ -239,7 +216,7 @@ export default function PeoplePage() {
         );
       }
       setEditId(null);
-      await fetchPeople();
+      await refreshAll();
     } catch (err) {
       setEditError(
         err instanceof Error ? err.message : "Failed to save changes."
@@ -263,7 +240,7 @@ export default function PeoplePage() {
       }
       setArchiveId(null);
       setArchiveError(null);
-      await fetchPeople();
+      await refreshAll();
     } catch {
       // Keep archiveId open so the user can retry
       setArchiveError("Couldn't archive — try again.");
@@ -303,8 +280,8 @@ export default function PeoplePage() {
           className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          <span className="flex-1">{loadError}</span>
-          <Button variant="danger" size="sm" onClick={fetchPeople}>
+          <span className="flex-1">{loadError?.message}</span>
+          <Button variant="danger" size="sm" onClick={() => refreshAll()}>
             Retry
           </Button>
         </div>

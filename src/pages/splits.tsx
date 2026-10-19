@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { expensesQuery, peopleQuery, tagsQuery, useRefreshAll } from "../queries";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -60,6 +62,9 @@ function monthLabel(day: string): string {
   return localDate(day).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+const NO_EXPENSES: ExpenseListItem[] = [];
+const NO_PEOPLE: Person[] = [];
+
 // Filters, the open panel, and ticks survive opening an expense and coming
 // back. sessionStorage lasts as long as the browser tab.
 const HOME_STATE_KEY = "splitr.home";
@@ -119,18 +124,24 @@ function Tick({
 // ---------------------------------------------------------------------------
 
 export default function SplitsPage() {
-  const [expenses, setExpenses] = useState<ExpenseListItem[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">(
-    "loading"
-  );
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const expensesResult = useQuery(expensesQuery<ExpenseListItem>());
+  // People and tags are extras here: if they fail, the list still shows
+  const peopleResult = useQuery(peopleQuery);
+  const tagsResult = useQuery(tagsQuery);
+  const refreshAll = useRefreshAll();
+  const expenses = expensesResult.data ?? NO_EXPENSES;
+  const people = peopleResult.data ?? NO_PEOPLE;
+  const loadError = expensesResult.error;
+  const loadState = loadError ? "error" : expensesResult.data ? "ready" : "loading";
+
+  // Restored when coming back to the page
+  const [saved] = useState(readHomeState);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(saved?.selectedIds));
+  const [filters, setFilters] = useState<ExpenseFilters>(saved?.filters ?? NO_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(saved?.filtersOpen ?? false);
   const searchRef = useRef<HTMLInputElement>(null);
   // Every tag on the Tags page (for bulk tagging), not just ones in use
-  const [tagList, setTagList] = useState<string[]>([]);
+  const tagList = useMemo(() => (tagsResult.data ?? []).map((t) => t.name), [tagsResult.data]);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -259,49 +270,12 @@ export default function SplitsPage() {
       throw new Error((body as { error?: string }).error ?? `Error ${res.status}`);
     }
     if (action.action === "delete") setSelectedIds(new Set());
-    const listRes = await fetch("/api/expenses");
-    if (listRes.ok) setExpenses((await listRes.json()) as ExpenseListItem[]);
+    await refreshAll();
   }
 
   function personName(id: string): string {
     return personById.get(id)?.name ?? id.slice(0, 6);
   }
-
-  // loadState starts as "loading", so the effect only has to settle it
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/expenses").then((r) => {
-        if (!r.ok) throw new Error(`Failed to load expenses (HTTP ${r.status})`);
-        return r.json() as Promise<ExpenseListItem[]>;
-      }),
-      fetch("/api/people").then((r) => {
-        if (!r.ok) return [] as Person[];
-        return r.json() as Promise<Person[]>;
-      }),
-      fetch("/api/tags").then((r) => {
-        if (!r.ok) return [] as { name: string }[];
-        return r.json() as Promise<{ name: string }[]>;
-      }),
-    ])
-      .then(([exp, ppl, tgs]) => {
-        setExpenses(exp);
-        setPeople(ppl);
-        setTagList(tgs.map((t) => t.name));
-        const saved = readHomeState();
-        if (saved) {
-          setFilters(saved.filters);
-          setFiltersOpen(saved.filtersOpen);
-          setSelectedIds(new Set(saved.selectedIds));
-        }
-        setLoadState("ready");
-      })
-      .catch((err) => {
-        setLoadError(
-          err instanceof Error ? err.message : "An unexpected error occurred."
-        );
-        setLoadState("error");
-      });
-  }, []);
 
   // "/" jumps to search; Esc closes the filter panel (the selection bar
   // handles Esc itself while anything is ticked)
@@ -370,8 +344,8 @@ export default function SplitsPage() {
           className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          <span className="flex-1">{loadError}</span>
-          <Button variant="danger" size="sm" onClick={() => window.location.reload()}>
+          <span className="flex-1">{loadError?.message}</span>
+          <Button variant="danger" size="sm" onClick={() => refreshAll()}>
             Retry
           </Button>
         </div>

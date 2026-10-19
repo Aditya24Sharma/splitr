@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { tagsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 
@@ -25,12 +27,14 @@ function expensesLabel(n: number): string {
 // Page
 // ---------------------------------------------------------------------------
 
+const NO_TAGS: Tag[] = [];
+
 export default function TagsPage() {
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">(
-    "loading"
-  );
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const tagsResult = useQuery(tagsQuery);
+  const refreshAll = useRefreshAll();
+  const tags: Tag[] = tagsResult.data ?? NO_TAGS;
+  const loadError = tagsResult.error;
+  const loadState = loadError ? "error" : tagsResult.data ? "ready" : "loading";
 
   // ---- Add form ----
   const [addName, setAddName] = useState("");
@@ -49,34 +53,6 @@ export default function TagsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Fetch
-  // ---------------------------------------------------------------------------
-
-  const fetchTags = useCallback(
-    () =>
-      fetch("/api/tags")
-        .then((res) => {
-          if (!res.ok) throw new Error(`Failed to load tags (HTTP ${res.status})`);
-          return res.json() as Promise<Tag[]>;
-        })
-        .then((data) => {
-          setTags(data);
-          setLoadState("ready");
-        })
-        .catch((err) => {
-          setLoadError(
-            err instanceof Error ? err.message : "An unexpected error occurred."
-          );
-          setLoadState("error");
-        }),
-    []
-  );
-
-  useEffect(() => {
-    fetchTags();
-  }, [fetchTags]);
-
-  // ---------------------------------------------------------------------------
   // Add
   // ---------------------------------------------------------------------------
 
@@ -93,7 +69,7 @@ export default function TagsPage() {
       });
       if (!res.ok) throw new Error(await errorMessage(res));
       setAddName("");
-      await fetchTags();
+      await refreshAll();
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Failed to add tag.");
     } finally {
@@ -125,7 +101,7 @@ export default function TagsPage() {
       });
       if (!res.ok) throw new Error(await errorMessage(res));
       setEditId(null);
-      await fetchTags();
+      await refreshAll();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to rename tag.");
     } finally {
@@ -144,7 +120,7 @@ export default function TagsPage() {
       const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await errorMessage(res));
       setDeleteId(null);
-      await fetchTags();
+      await refreshAll();
     } catch {
       // Keep the confirmation open so the user can retry
       setDeleteError("Couldn't delete — try again.");
@@ -178,8 +154,8 @@ export default function TagsPage() {
           className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          <span className="flex-1">{loadError}</span>
-          <Button variant="danger" size="sm" onClick={fetchTags}>
+          <span className="flex-1">{loadError?.message}</span>
+          <Button variant="danger" size="sm" onClick={() => refreshAll()}>
             Retry
           </Button>
         </div>

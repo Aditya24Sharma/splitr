@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { accountsQuery, expenseQuery, isNotFound, peopleQuery, transactionQuery, useRefreshAll } from "../queries";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
@@ -7,8 +9,8 @@ import { PersonChip } from "@/components/PersonChip";
 import { CategoryChips } from "@/components/CategoryChips";
 import { formatUSD } from "@/lib/money";
 import { ALL_CATEGORIES, isMoneyMoving, isSpending, yourShare } from "@/lib/spending";
-import { txLabel, type TxView } from "@/lib/transactions";
-import { accountLabel, indexAccounts, type AccountRef, type AccountsResponse } from "@/lib/bank-types";
+import { txLabel } from "@/lib/transactions";
+import { accountLabel, indexAccounts } from "@/lib/bank-types";
 
 interface Person {
   id: string;
@@ -38,51 +40,37 @@ export default function TransactionPage() {
   const id = useRouteParam("id");
   const goTo = useGoTo();
 
-  const [tx, setTx] = useState<TxView | null>(null);
-  const [account, setAccount] = useState<AccountRef | undefined>(undefined);
-  const [split, setSplit] = useState<LinkedSplit | null>(null);
-  const [people, setPeople] = useState<Map<string, Person>>(new Map());
-  const [loadState, setLoadState] = useState<"loading" | "error" | "notfound" | "ready">("loading");
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const client = useQueryClient();
+  const refreshAll = useRefreshAll();
+  const txResult = useQuery(transactionQuery(id));
+  const tx = txResult.data ?? null;
+  // Shown alongside the charge: its bank, and the split made from it if any.
+  // These are extras; if one fails to load, the charge still shows.
+  const banksResult = useQuery(accountsQuery);
+  const splitResult = useQuery({ ...expenseQuery<LinkedSplit>(tx?.split?.expenseId ?? ""), enabled: Boolean(tx?.split) });
+  const peopleResult = useQuery({ ...peopleQuery, enabled: Boolean(tx?.split) });
+  const account = tx?.accountId != null ? indexAccounts(banksResult.data?.items ?? []).get(tx.accountId) : undefined;
+  const split = splitResult.data ?? null;
+  const people = new Map((peopleResult.data ?? []).map((p) => [p.id, p]));
+  const loadError = txResult.error;
+  const loadState = isNotFound(loadError)
+    ? "notfound"
+    : loadError
+      ? "error"
+      : tx && !banksResult.isLoading && !splitResult.isLoading && !peopleResult.isLoading
+        ? "ready"
+        : "loading";
 
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const txRes = await fetch(`/api/transactions/${id}`);
-      if (txRes.status === 404) return setLoadState("notfound");
-      if (!txRes.ok) throw new Error(`Failed to load transaction (HTTP ${txRes.status})`);
-      const t = (await txRes.json()) as TxView;
-
-      const [bankRes, splitRes, peopleRes] = await Promise.all([
-        fetch("/api/accounts"),
-        t.split ? fetch(`/api/expenses/${t.split.expenseId}`) : null,
-        t.split ? fetch("/api/people") : null,
-      ]);
-      if (bankRes.ok && t.accountId != null) {
-        const banks = (await bankRes.json()) as AccountsResponse;
-        setAccount(indexAccounts(banks.items).get(t.accountId));
-      }
-      if (splitRes?.ok) setSplit((await splitRes.json()) as LinkedSplit);
-      if (peopleRes?.ok) {
-        const list = (await peopleRes.json()) as Person[];
-        setPeople(new Map(list.map((p) => [p.id, p])));
-      }
-      setTx(t);
-      setLoadState("ready");
-    })().catch((err) => {
-      setLoadError(err instanceof Error ? err.message : "An unexpected error occurred.");
-      setLoadState("error");
-    });
-  }, [id]);
-
   async function handleCategory(next: string) {
     if (!tx || next === tx.categoryPrimary) return;
     const prev = tx;
-    setTx({ ...tx, categoryPrimary: next, categoryDetailed: null }); // optimistic
+    const key = transactionQuery(id).queryKey;
+    client.setQueryData(key, { ...tx, categoryPrimary: next, categoryDetailed: null }); // optimistic
     setCategoryError(null);
     try {
       const res = await fetch(`/api/transactions/${id}`, {
@@ -91,8 +79,10 @@ export default function TransactionPage() {
         body: JSON.stringify({ categoryPrimary: next }),
       });
       if (!res.ok) throw new Error();
+      // Money's list and totals use the category too
+      refreshAll();
     } catch {
-      setTx(prev); // revert
+      client.setQueryData(key, prev); // revert
       setCategoryError("Couldn’t save the category — please try again");
     }
   }
@@ -107,6 +97,7 @@ export default function TransactionPage() {
         throw new Error(body.error ?? `Error ${res.status}`);
       }
       goTo("/");
+      refreshAll();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
       setDeleteConfirm(false);
@@ -128,7 +119,7 @@ export default function TransactionPage() {
         <p className="font-display text-4xl uppercase">
           {loadState === "notfound" ? "Transaction not found" : "Something went wrong"}
         </p>
-        {loadError && <p className="text-sm text-danger">{loadError}</p>}
+        {loadState === "error" && <p className="text-sm text-danger">{loadError?.message}</p>}
         <Link href="/">
           <Button variant="secondary">Back to Money</Button>
         </Link>

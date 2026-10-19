@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import Link, { useQuery } from "@/components/Link";
+import { useQuery } from "@tanstack/react-query";
+import { accountsQuery, transactionQuery } from "../queries";
+import Link, { useQueryString } from "@/components/Link";
 import { formatUSD } from "@/lib/money";
-import { accountLabel, indexAccounts, type AccountRef, type AccountsResponse } from "@/lib/bank-types";
-import type { TxView } from "@/lib/transactions";
+import { accountLabel, indexAccounts } from "@/lib/bank-types";
 
 const SPLIT_CHOICES = [
   {
@@ -26,32 +26,18 @@ const JUST_ME = {
   color: "bg-mint-dim",
 } as const;
 
-/** The charge to split and the account it's on; null if there isn't one. */
-async function loadCharge(fromTx: string): Promise<{ tx: TxView; account?: AccountRef } | null> {
-  const [txRes, bankRes] = await Promise.all([fetch(`/api/transactions/${fromTx}`), fetch("/api/accounts")]);
-  if (!txRes.ok) return null;
-  const tx = (await txRes.json()) as TxView;
-  const banks = bankRes.ok ? ((await bankRes.json()) as AccountsResponse) : { items: [] };
-  return { tx, account: tx.accountId != null ? indexAccounts(banks.items).get(tx.accountId) : undefined };
-}
-
 export default function NewExpensePage() {
   // ?fromTx=<id> splits a charge that's already in Money
-  const { fromTx } = useQuery<{ fromTx?: string }>();
-  const [charge, setCharge] = useState<Awaited<ReturnType<typeof loadCharge>>>(null);
-  const [loading, setLoading] = useState(Boolean(fromTx));
+  const { fromTx } = useQueryString<{ fromTx?: string }>();
+  // The charge to split and its bank; a charge that can't be loaded falls
+  // back to the plain chooser
+  const txResult = useQuery({ ...transactionQuery(fromTx ?? ""), enabled: Boolean(fromTx) });
+  const banksResult = useQuery({ ...accountsQuery, enabled: Boolean(fromTx) });
 
-  useEffect(() => {
-    if (!fromTx) return;
-    loadCharge(fromTx)
-      .then(setCharge)
-      .catch(() => setCharge(null))
-      .finally(() => setLoading(false));
-  }, [fromTx]);
+  if (txResult.isLoading || banksResult.isLoading) return <p className="text-sm text-ink-faint">Loading…</p>;
 
-  if (loading) return <p className="text-sm text-ink-faint">Loading…</p>;
-
-  const tx = charge?.tx ?? null;
+  const tx = txResult.data ?? null;
+  const account = tx?.accountId != null ? indexAccounts(banksResult.data?.items ?? []).get(tx.accountId) : undefined;
   const choices = tx ? SPLIT_CHOICES : [JUST_ME, ...SPLIT_CHOICES];
   const query = tx ? `?fromTx=${tx.id}` : "";
 
@@ -81,7 +67,7 @@ export default function NewExpensePage() {
             <p className="text-sm text-ink-muted truncate">
               {new Date(`${tx.date}T00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               {" · "}
-              {accountLabel(charge?.account)}
+              {accountLabel(account)}
             </p>
           </div>
           <p className="font-display text-4xl tabular-nums">{formatUSD(tx.amount)}</p>

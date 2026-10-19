@@ -3,8 +3,9 @@
  * Tags are created on the Tags page, so this only picks from that list.
  */
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "@/components/Link";
+import { tagsQuery } from "@/src/queries";
 
 interface TagPickerProps {
   value: string[];
@@ -13,14 +14,9 @@ interface TagPickerProps {
 }
 
 export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
-  const [tags, setTags] = useState<string[] | null>(null);
-
-  useEffect(() => {
-    fetch("/api/tags")
-      .then((r) => (r.ok ? (r.json() as Promise<{ name: string }[]>) : []))
-      .then((data) => setTags(data.map((t) => t.name)))
-      .catch(() => setTags([]));
-  }, []);
+  // A failed load shows as "No tags yet", as it always has
+  const { data, isError } = useQuery(tagsQuery);
+  const tags = isError ? [] : (data?.map((t) => t.name) ?? null);
 
   function toggle(tag: string) {
     onChange(value.includes(tag) ? value.filter((t) => t !== tag) : [...value, tag]);

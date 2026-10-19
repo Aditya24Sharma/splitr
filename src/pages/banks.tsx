@@ -1,30 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { accountsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { BankLogo } from "@/components/BankLogo";
 import { SyncButton } from "@/components/SyncButton";
 import { PlaidLinkButton } from "@/components/PlaidLinkButton";
 import { formatUSD } from "@/lib/money";
 import { netBalance } from "@/lib/spending";
-import { lastSynced, timeAgo, type AccountsResponse, type BankItem } from "@/lib/bank-types";
-
-async function fetchBanks(): Promise<AccountsResponse> {
-  const res = await fetch("/api/accounts");
-  if (!res.ok) throw new Error(`Failed to load banks (HTTP ${res.status})`);
-  return res.json() as Promise<AccountsResponse>;
-}
+import { lastSynced, timeAgo, type BankItem } from "@/lib/bank-types";
 
 export default function BanksPage() {
-  const [data, setData] = useState<AccountsResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { data, error: loadError } = useQuery(accountsQuery);
+  const refreshAll = useRefreshAll();
   const [notice, setNotice] = useState<string | null>(null);
-
-  const reload = useCallback(() => fetchBanks().then(setData), []);
-
-  useEffect(() => {
-    fetchBanks()
-      .then(setData)
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Couldn’t load banks."));
-  }, []);
 
   const items = data?.items ?? [];
   const allAccounts = items.flatMap((i) => i.accounts);
@@ -44,8 +32,8 @@ export default function BanksPage() {
           className="flex items-center gap-3 text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          <span className="flex-1">{loadError}</span>
-          <Button variant="danger" size="sm" onClick={() => window.location.reload()}>
+          <span className="flex-1">{loadError.message}</span>
+          <Button variant="danger" size="sm" onClick={() => refreshAll()}>
             Retry
           </Button>
         </div>
@@ -75,10 +63,10 @@ export default function BanksPage() {
                 variant={items.length > 0 ? "secondary" : "primary"}
                 onLinked={(name) => {
                   setNotice(`Linked ${name ?? "your bank"}. Syncing its transactions…`);
-                  reload().catch(() => {});
+                  refreshAll();
                   // Pull history right away so Money fills in without another click
                   fetch("/api/plaid/sync", { method: "POST" })
-                    .then(() => reload())
+                    .then(() => refreshAll())
                     .then(() => setNotice(`Linked ${name ?? "your bank"}.`))
                     .catch(() => setNotice(`Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`));
                 }}
@@ -90,7 +78,7 @@ export default function BanksPage() {
               </p>
             )}
             {items.length > 1 && (
-              <SyncButton label="Sync all" onSynced={() => reload().catch(() => {})} />
+              <SyncButton label="Sync all" onSynced={refreshAll} />
             )}
           </div>
           {notice && (
@@ -109,7 +97,7 @@ export default function BanksPage() {
           ) : (
             <div className="space-y-6">
               {items.map((item, i) => (
-                <BankCard key={item.id} item={item} index={i} onChange={() => reload().catch(() => {})} />
+                <BankCard key={item.id} item={item} index={i} onChange={refreshAll} />
               ))}
             </div>
           )}

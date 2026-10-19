@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import Link, { useGoTo, useQuery } from "@/components/Link";
+import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
@@ -10,7 +10,7 @@ import { toCents, formatUSD } from "@/lib/money";
 import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
 import { expenseDay } from "@/lib/expense-filter";
 import { txLabel, type TxView } from "@/lib/transactions";
-import { loadSourceTx } from "@/lib/source-tx";
+import { loadExpenseToEdit, loadSourceTx, peopleQuery, queryClient, useRefreshAll } from "../queries";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,13 +44,6 @@ interface SavedExpense {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function loadSavedExpense(id: string): Promise<SavedExpense> {
-  const r = await fetch(`/api/expenses/${id}`);
-  if (r.status === 404) throw new Error("Expense not found.");
-  if (!r.ok) throw new Error(`Failed to load expense (HTTP ${r.status})`);
-  return r.json() as Promise<SavedExpense>;
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -58,8 +51,9 @@ async function loadSavedExpense(id: string): Promise<SavedExpense> {
 export default function NewSimplePage() {
   // ?edit=<id> opens this form pre-filled to edit a saved expense;
   // ?fromTx=<id> pre-fills it from a charge in Money and links the two
-  const { edit: editId, fromTx } = useQuery<{ edit?: string; fromTx?: string }>();
+  const { edit: editId, fromTx } = useQueryString<{ edit?: string; fromTx?: string }>();
   const goTo = useGoTo();
+  const refreshAll = useRefreshAll();
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
   const [sourceTx, setSourceTx] = useState<TxView | null>(null);
 
@@ -93,8 +87,8 @@ export default function NewSimplePage() {
   // peopleLoading starts true, so the effect only has to settle it
   useEffect(() => {
     Promise.all([
-      fetch("/api/people").then((r) => r.json() as Promise<Person[]>),
-      editId ? loadSavedExpense(editId) : null,
+      queryClient.fetchQuery(peopleQuery),
+      editId ? loadExpenseToEdit<SavedExpense>(editId) : null,
       fromTx && !editId ? loadSourceTx(fromTx) : null,
     ])
       .then(([data, saved, tx]) => {
@@ -293,6 +287,7 @@ export default function NewSimplePage() {
 
       if (res.ok) {
         const { id } = (await res.json()) as { id: string };
+        refreshAll();
         goTo(`/expenses/${id}`);
         return;
       }

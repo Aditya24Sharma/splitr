@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Link, { useGoTo, useQuery } from "@/components/Link";
+import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { Section } from "@/components/ui/Section";
@@ -8,11 +8,13 @@ import { CategoryChips } from "@/components/CategoryChips";
 import { toCents, formatUSD } from "@/lib/money";
 import { MANUAL_CATEGORIES, todayLocal } from "@/lib/spending";
 import type { TxView } from "@/lib/transactions";
+import { loadManualTxToEdit, useRefreshAll } from "../queries";
 
 export default function AddExpensePage() {
   // ?edit=<id> opens this form pre-filled to edit a hand-added expense
-  const { edit: editId } = useQuery<{ edit?: string }>();
+  const { edit: editId } = useQueryString<{ edit?: string }>();
   const goTo = useGoTo();
+  const refreshAll = useRefreshAll();
 
   const [amountDollars, setAmountDollars] = useState("");
   const [name, setName] = useState("");
@@ -26,12 +28,8 @@ export default function AddExpensePage() {
 
   useEffect(() => {
     if (!editId) return;
-    fetch(`/api/transactions/${editId}`)
-      .then(async (r) => {
-        if (r.status === 404) throw new Error("Expense not found.");
-        if (!r.ok) throw new Error(`Failed to load expense (HTTP ${r.status})`);
-        const tx = (await r.json()) as TxView;
-        if (tx.source !== "MANUAL") throw new Error("Bank transactions can’t be edited here.");
+    loadManualTxToEdit(editId)
+      .then((tx) => {
         setAmountDollars((tx.amount / 100).toFixed(2));
         setName(tx.name);
         setDate(tx.date);
@@ -63,6 +61,7 @@ export default function AddExpensePage() {
       });
       const body = (await res.json().catch(() => ({}))) as Partial<TxView> & { error?: string };
       if (!res.ok) throw new Error(body.error ?? `Server error ${res.status}`);
+      refreshAll();
       goTo(then === "split" ? `/expenses/new?fromTx=${body.id}` : editId ? `/transactions/${editId}` : "/");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed — please try again");
