@@ -5,6 +5,7 @@ import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
 import { BankLogo } from "@/components/BankLogo";
+import { DeleteSection } from "@/components/DeleteSection";
 import { PersonChip } from "@/components/PersonChip";
 import { CategoryChips } from "@/components/CategoryChips";
 import { formatUSD } from "@/lib/money";
@@ -62,7 +63,6 @@ export default function TransactionPage() {
         : "loading";
 
   const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -100,7 +100,6 @@ export default function TransactionPage() {
       refreshAll();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
-      setDeleteConfirm(false);
       setDeleting(false);
     }
   }
@@ -169,31 +168,7 @@ export default function TransactionPage() {
           <Link href={`/transactions/new?edit=${tx.id}`}>
             <Button variant="primary" size="sm">Edit</Button>
           </Link>
-          <div className="ml-auto">
-            {!deleteConfirm ? (
-              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(true)}>
-                Delete
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-ink-muted">
-                  {tx.split ? "Delete? The split stays." : "Delete for good?"}
-                </span>
-                <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? "Deleting…" : "Delete"}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
         </div>
-      )}
-      {deleteError && (
-        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
-          {deleteError}
-        </p>
       )}
 
       {/* ── Split ───────────────────────────────────────────────────────── */}
@@ -302,6 +277,17 @@ export default function TransactionPage() {
           </p>
         )}
       </Section>
+
+      {/* Bank charges come from the bank, so only hand-added ones can go */}
+      {tx.source === "MANUAL" && (
+        <DeleteSection
+          label="Delete expense"
+          question={tx.split ? "Delete? The split stays." : "Delete for good?"}
+          deleting={deleting}
+          error={deleteError}
+          onDelete={handleDelete}
+        />
+      )}
     </div>
   );
 }

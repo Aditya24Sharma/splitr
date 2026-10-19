@@ -4,6 +4,7 @@ import { expenseQuery, isNotFound, peopleQuery, useRefreshAll } from "../queries
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/CopyButton";
+import { DeleteSection } from "@/components/DeleteSection";
 import { PersonChip } from "@/components/PersonChip";
 import { TagPicker } from "@/components/TagPicker";
 import { formatUSD } from "@/lib/money";
@@ -111,7 +112,6 @@ export default function ExpenseDetailPage() {
   }
 
   // Delete state
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -193,7 +193,6 @@ export default function ExpenseDetailPage() {
       setDeleteError(
         err instanceof Error ? err.message : "Delete failed — please try again"
       );
-      setDeleteConfirm(false);
     } finally {
       setDeleting(false);
     }
@@ -342,29 +341,7 @@ export default function ExpenseDetailPage() {
           {logged ? "✓ Logged in Splitwise" : "Mark as logged"}
         </button>
         <CopyButton summary={copySummary} />
-        <div className="ml-auto">
-          {!deleteConfirm ? (
-            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(true)}>
-              Delete
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-ink-muted">Delete for good?</span>
-              <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
-                {deleting ? "Deleting…" : "Delete"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
-                Cancel
-              </Button>
-            </div>
-          )}
-        </div>
       </div>
-      {deleteError && (
-        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
-          {deleteError}
-        </p>
-      )}
 
       {/* ── Who owes what ───────────────────────────────────────────────── */}
       <section aria-labelledby="owes-heading">
@@ -453,6 +430,14 @@ export default function ExpenseDetailPage() {
           </p>
         )}
       </section>
+
+      <DeleteSection
+        label="Delete split"
+        question="Delete for good?"
+        deleting={deleting}
+        error={deleteError}
+        onDelete={handleDelete}
+      />
     </div>
   );
 }
