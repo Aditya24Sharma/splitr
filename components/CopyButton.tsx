@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 
 interface CopyButtonProps {
@@ -22,6 +23,7 @@ export function CopyButton({ summary, disabled }: CopyButtonProps) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API unavailable (non-HTTPS or user denied)
+      toast.error("Couldn’t copy. Your browser blocked the clipboard.");
     }
   }
 

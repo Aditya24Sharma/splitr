@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
@@ -79,7 +80,6 @@ export default function NewSimplePage() {
 
   // Save state
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Load people
@@ -260,7 +260,6 @@ export default function NewSimplePage() {
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
-    setSaveError(null);
 
     const payload = {
       type: "SIMPLE" as const,
@@ -298,9 +297,7 @@ export default function NewSimplePage() {
         (body as { error?: string }).error ?? `Server error ${res.status}`
       );
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Save failed — please try again"
-      );
+      toast.error(err instanceof Error ? err.message : "Save failed. Try again.");
     } finally {
       setSaving(false);
     }
@@ -334,9 +331,6 @@ export default function NewSimplePage() {
     return (
       <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
         <p className="font-display text-4xl uppercase">Add people first</p>
-        <p className="mt-3 text-sm text-ink-muted">
-          You need at least one person to split an expense with.
-        </p>
         <Link href="/people" className="inline-block mt-6">
           <Button variant="primary">Add people</Button>
         </Link>
@@ -363,7 +357,7 @@ export default function NewSimplePage() {
         {sourceTx && (
           <p className="mt-3 text-sm text-ink-muted">
             From your <span className="font-semibold text-ink tabular-nums">{formatUSD(sourceTx.amount)}</span>{" "}
-            charge. Your share comes off what you spent in Money.
+            charge
           </p>
         )}
       </header>
@@ -453,9 +447,6 @@ export default function NewSimplePage() {
               />
             ))}
           </div>
-        )}
-        {participantList.length === 0 && !peopleLoading && (
-          <p className="text-sm text-ink-muted">Tap everyone who shares this.</p>
         )}
 
         <div className="flex gap-1.5 pt-1" role="radiogroup" aria-label="Split method">
@@ -553,18 +544,9 @@ export default function NewSimplePage() {
       )}
 
       {/* ── Tags ────────────────────────────────────────────────────────── */}
-      <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
+      <Section title="Tags">
         <TagPicker value={tags} onChange={setTags} />
       </Section>
-
-      {saveError && (
-        <p
-          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
-          role="alert"
-        >
-          {saveError}
-        </p>
-      )}
 
       <SaveBar
         summary={

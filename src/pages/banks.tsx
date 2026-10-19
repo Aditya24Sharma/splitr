@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { accountsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { BankLogo } from "@/components/BankLogo";
@@ -12,7 +13,6 @@ import { lastSynced, timeAgo, type BankItem } from "@/lib/bank-types";
 export default function BanksPage() {
   const { data, error: loadError } = useQuery(accountsQuery);
   const refreshAll = useRefreshAll();
-  const [notice, setNotice] = useState<string | null>(null);
   // Banks whose last sync said to sign in again. Kept until they sync cleanly.
   const [needsLogin, setNeedsLogin] = useState<ReadonlySet<number>>(new Set());
 
@@ -28,15 +28,17 @@ export default function BanksPage() {
     refreshAll();
   }
 
-  // Pull history right away so Money fills in without another click
-  function syncAfterLink(done: string, retry: string) {
-    fetch("/api/plaid/sync", { method: "POST" })
+  // Pull history right away so Money fills in without another click.
+  // One toast that reads "Syncing…" until the sync lands.
+  function syncAfterLink(url: string, syncing: string, done: string, retry: string) {
+    toast.loading(syncing, { id: "link" });
+    fetch(url, { method: "POST" })
       .then((r) => r.json() as Promise<{ results?: SyncResult[] }>)
       .then((d) => {
         onSynced(d.results ?? []);
-        setNotice(done);
+        toast.success(done, { id: "link" });
       })
-      .catch(() => setNotice(retry));
+      .catch(() => toast.error(retry, { id: "link" }));
   }
 
   const items = data?.items ?? [];
@@ -47,9 +49,6 @@ export default function BanksPage() {
     <div className="space-y-8">
       <header>
         <h1 className="font-display text-6xl sm:text-7xl uppercase">Banks</h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          Linked through Plaid.
-        </p>
       </header>
 
       {loadError && (
@@ -85,14 +84,19 @@ export default function BanksPage() {
                 variant={items.length > 0 ? "secondary" : "primary"}
                 onLinked={(name, reconnected) => {
                   if (reconnected) {
-                    setNotice("Reconnected. Syncing…");
-                    syncAfterLink("Reconnected.", "Reconnected. Sync again in a minute.");
+                    syncAfterLink(
+                      "/api/plaid/sync",
+                      "Reconnected. Syncing…",
+                      "Reconnected",
+                      "Reconnected. Sync again in a minute."
+                    );
                     return;
                   }
-                  setNotice(`Linked ${name ?? "your bank"}. Syncing its transactions…`);
                   refreshAll();
                   syncAfterLink(
-                    `Linked ${name ?? "your bank"}.`,
+                    "/api/plaid/sync",
+                    `Linked ${name ?? "your bank"}. Syncing…`,
+                    `Linked ${name ?? "your bank"}`,
                     `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
                   );
                 }}
@@ -107,18 +111,10 @@ export default function BanksPage() {
               <SyncButton label="Sync all" size="md" onSynced={onSynced} />
             )}
           </div>
-          {notice && (
-            <p role="status" className="text-sm rounded-2xl bg-mint-dim border border-mint px-4 py-2.5">
-              {notice}
-            </p>
-          )}
 
           {items.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-ink px-6 py-10 text-center">
               <p className="font-display text-3xl uppercase">No banks yet</p>
-              <p className="mt-3 text-sm text-ink-muted">
-                Link a bank or card and its charges land in Money, ready to split.
-              </p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -130,16 +126,14 @@ export default function BanksPage() {
                   needsLogin={needsLogin.has(item.id)}
                   onChange={refreshAll}
                   onSynced={onSynced}
-                  onReconnected={() => {
-                    setNotice(`Reconnected ${item.institutionName ?? "your bank"}. Syncing…`);
-                    fetch(`/api/plaid/sync/${item.id}`, { method: "POST" })
-                      .then((r) => r.json() as Promise<{ results?: SyncResult[] }>)
-                      .then((d) => {
-                        onSynced(d.results ?? []);
-                        setNotice(`Reconnected ${item.institutionName ?? "your bank"}.`);
-                      })
-                      .catch(() => setNotice("Reconnected. Sync again in a minute."));
-                  }}
+                  onReconnected={() =>
+                    syncAfterLink(
+                      `/api/plaid/sync/${item.id}`,
+                      `Reconnected ${item.institutionName ?? "your bank"}. Syncing…`,
+                      `Reconnected ${item.institutionName ?? "your bank"}`,
+                      "Reconnected. Sync again in a minute."
+                    )
+                  }
                 />
               ))}
             </div>
@@ -167,12 +161,10 @@ function BankCard({
 }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const name = item.institutionName ?? "Linked bank";
 
   async function unlink() {
     setBusy(true);
-    setError(null);
     try {
       const res = await fetch(`/api/plaid/items/${item.id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -181,7 +173,7 @@ function BankCard({
       }
       onChange();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unlink failed");
+      toast.error(err instanceof Error ? err.message : "Unlink failed");
       setBusy(false);
       setConfirm(false);
     }
@@ -193,36 +185,37 @@ function BankCard({
       style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
       aria-label={name}
     >
-      <div className="flex items-center gap-3 px-5 py-3.5 bg-mist border-b border-ink flex-wrap">
-        <BankLogo item={item} />
-        <h2 className="font-semibold mr-auto">{name}</h2>
-        {confirm ? (
-          <span className="flex items-center gap-2">
-            <span className="text-sm text-ink-muted">Unlink and delete its transactions?</span>
-            <Button variant="danger" size="sm" onClick={unlink} disabled={busy}>
-              {busy ? "Unlinking…" : "Unlink"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setConfirm(false)} disabled={busy}>
-              Cancel
-            </Button>
-          </span>
-        ) : (
-          <span className="flex items-center gap-1">
-            {needsLogin && (
+      <div className="bg-mist border-b border-ink">
+        {/* One line at any width: a long name shortens, the buttons never wrap */}
+        <div className="flex items-center gap-3 pl-5 pr-3 py-3.5">
+          <BankLogo item={item} />
+          <h2 className="flex-1 min-w-0 font-semibold truncate">{name}</h2>
+          <span className="shrink-0 flex items-center gap-1">
+            {/* A bank that needs signing in again can't sync until it does */}
+            {needsLogin ? (
               <PlaidLinkButton itemId={item.id} size="sm" onLinked={onReconnected} />
+            ) : (
+              <SyncButton itemId={item.id} variant="ghost" onSynced={onSynced} />
             )}
-            <SyncButton itemId={item.id} variant="ghost" onSynced={onSynced} />
-            <Button variant="ghost" size="sm" onClick={() => setConfirm(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setConfirm(true)} disabled={confirm}>
               Unlink
             </Button>
           </span>
+        </div>
+        {confirm && (
+          <div className="flex items-center gap-2 flex-wrap px-5 pb-3.5">
+            <span className="mr-auto text-sm text-ink-muted">Unlink and delete its transactions?</span>
+            <span className="flex items-center gap-2">
+              <Button variant="danger" size="sm" onClick={unlink} disabled={busy}>
+                {busy ? "Unlinking…" : "Unlink"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirm(false)} disabled={busy}>
+                Cancel
+              </Button>
+            </span>
+          </div>
         )}
       </div>
-      {error && (
-        <p className="px-5 py-2 text-sm text-danger bg-danger-dim" role="alert">
-          {error}
-        </p>
-      )}
       {item.accounts.length === 0 ? (
         <p className="px-5 py-4 text-sm text-ink-muted">No accounts yet. Sync to fetch them.</p>
       ) : (

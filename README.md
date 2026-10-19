@@ -65,6 +65,24 @@ Secrets are set once with `npx wrangler secret put <NAME>` for each key in
 The app is served only at `money.aditya24sharma.dev`; `workers_dev` and preview
 URLs are off in `wrangler.jsonc`, because they would skip the Access login.
 
+### Where it's hosted
+
+Everything runs on Cloudflare, on the **free plan**:
+
+- **Workers** runs the API and serves the built React app as static assets.
+- **D1** is the database (`splitr`).
+- **Access** puts a login in front of the whole site.
+- **DNS**: the domain `aditya24sharma.dev` lives in the same Cloudflare
+  account, so the custom domain needs no setup outside it.
+
+Free-plan limits worth knowing before adding things:
+
+- The Worker bundle (only `worker/`) must stay under 3 MB compressed, and each
+  request gets 10 ms of CPU time. Front-end packages in `src/` don't count
+  toward either; they ship as static files.
+- Static asset requests are free and unlimited; only `/api/*` calls count
+  toward the 100,000 Worker requests per day.
+
 ---
 
 ## Usage

@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { formatUSD } from "@/lib/money";
@@ -38,7 +39,6 @@ export function SelectionBar({
 }: SelectionBarProps) {
   const [panel, setPanel] = useState<Panel>("none");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const count = selected.length;
@@ -58,17 +58,15 @@ export function SelectionBar({
 
   function toggle(p: Panel) {
     setPanel((cur) => (cur === p ? "none" : p));
-    setError(null);
   }
 
   async function run(action: Record<string, unknown>, closeAfter = false) {
     setPending(true);
-    setError(null);
     try {
       await onBulk(action);
       if (closeAfter) setPanel("none");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setPending(false);
     }
@@ -181,12 +179,6 @@ export function SelectionBar({
               {pending ? "Deleting…" : "Delete"}
             </Button>
           </div>
-        )}
-
-        {error && (
-          <p className="px-5 pt-3 text-sm font-semibold text-danger" role="alert">
-            {error}
-          </p>
         )}
 
         {/* ── Action row: summary on top on phones, one line on desktop ── */}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +26,6 @@ export default function AddExpensePage() {
   const [loading, setLoading] = useState(Boolean(editId));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState<false | "save" | "split">(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editId) return;
@@ -47,7 +47,6 @@ export default function AddExpensePage() {
   async function save(then: "save" | "split") {
     if (!canSave) return;
     setSaving(then);
-    setSaveError(null);
     try {
       const res = await fetch(editId ? `/api/transactions/${editId}` : "/api/transactions", {
         method: editId ? "PATCH" : "POST",
@@ -65,7 +64,7 @@ export default function AddExpensePage() {
       refreshAll();
       goTo(then === "split" ? `/expenses/new?fromTx=${body.id}` : editId ? `/transactions/${editId}` : "/");
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed — please try again");
+      toast.error(err instanceof Error ? err.message : "Save failed. Try again.");
       setSaving(false);
     }
   }
@@ -90,10 +89,6 @@ export default function AddExpensePage() {
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit expense" : "Add expense"}
         </h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          For cash and anything your linked banks don’t see. Card charges show up on their own
-          after a sync.
-        </p>
       </header>
 
       {/* ── Amount ──────────────────────────────────────────────────────── */}
@@ -145,12 +140,6 @@ export default function AddExpensePage() {
       <Section title="Category" hint="Optional.">
         <CategoryChips options={MANUAL_CATEGORIES} value={category} onChange={setCategory} disabled={loading} />
       </Section>
-
-      {saveError && (
-        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
-          {saveError}
-        </p>
-      )}
 
       <SaveBar
         summary={
