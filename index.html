@@ -13,7 +13,9 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 
     <!-- Saved to an iPhone home screen: opens full screen, with this name and icon -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- use-credentials sends the login cookie: everything here sits behind
+         Cloudflare Access, and manifests are fetched without cookies otherwise -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
