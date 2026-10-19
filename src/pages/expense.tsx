@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { expenseQuery, isNotFound, peopleQuery, useRefreshAll } from "../queries";
+import { Chevron } from "@/components/Chevron";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { BackLink } from "@/components/BackLink";
@@ -314,7 +315,7 @@ export default function ExpenseDetailPage() {
             </span>{" "}
             charge of <span className="font-semibold tabular-nums">{formatUSD(expense.transaction.amount)}</span>
           </span>
-          <span aria-hidden="true">→</span>
+          <Chevron direction="right" className="w-4 h-4 shrink-0" />
         </Link>
       )}
 

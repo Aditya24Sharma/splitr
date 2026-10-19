@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountsQuery, expenseQuery, isNotFound, peopleQuery, transactionQuery, useRefreshAll } from "../queries";
+import { Chevron } from "@/components/Chevron";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
@@ -191,9 +192,9 @@ export default function TransactionPage() {
               </div>
               <span
                 aria-hidden="true"
-                className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center text-xl transition-transform group-hover:translate-x-1"
+                className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
               >
-                →
+                <Chevron direction="right" />
               </span>
             </div>
             {split && (
@@ -247,9 +248,9 @@ export default function TransactionPage() {
                 </div>
                 <span
                   aria-hidden="true"
-                  className="shrink-0 w-10 h-10 rounded-full bg-ink text-white inline-flex items-center justify-center text-lg transition-transform group-hover:translate-x-1"
+                  className="shrink-0 w-10 h-10 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
                 >
-                  →
+                  <Chevron direction="right" />
                 </span>
               </Link>
             ))}

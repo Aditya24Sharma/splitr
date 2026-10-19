@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { accountsQuery, transactionQuery } from "../queries";
+import { Chevron } from "@/components/Chevron";
 import { BackLink } from "@/components/BackLink";
 import Link, { useQueryString } from "@/components/Link";
 import { formatUSD } from "@/lib/money";
@@ -96,9 +97,9 @@ export default function NewExpensePage() {
                 <p className="text-sm max-w-[26ch]">{c.body}</p>
                 <span
                   aria-hidden="true"
-                  className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center text-xl transition-transform group-hover:translate-x-1"
+                  className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
                 >
-                  →
+                  <Chevron direction="right" />
                 </span>
               </div>
             </Link>
