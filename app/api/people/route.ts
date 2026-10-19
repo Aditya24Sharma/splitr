@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 
 export async function GET() {
+  const prisma = getDb()
   const people = await prisma.person.findMany({
     where: { archived: false },
     orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
@@ -10,6 +11,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const prisma = getDb()
   let body: any
   try {
     body = await req.json()

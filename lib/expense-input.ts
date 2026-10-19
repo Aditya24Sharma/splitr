@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client'
 import { computeBreakdown, BreakdownExpense } from '@/lib/expense-breakdown'
 import { parseTags } from '@/lib/tags'
 
@@ -179,37 +178,3 @@ export function expenseFields(input: ExpenseInput) {
     totalCents: input.totalCents,
   }
 }
-
-/** Creates the items + assignments (itemized) or participants (simple) for an expense. */
-export async function createExpenseChildren(
-  tx: Prisma.TransactionClient,
-  expenseId: string,
-  input: ExpenseInput,
-) {
-  if (input.type === 'ITEMIZED') {
-    for (let idx = 0; idx < input.items.length; idx++) {
-      const it = input.items[idx]
-      const item = await tx.item.create({
-        data: {
-          expenseId,
-          name: it.name,
-          rawName: it.rawName,
-          quantity: it.quantity,
-          unitPriceCents: it.unitPriceCents,
-          lineTotalCents: it.lineTotalCents,
-          sortOrder: idx,
-        },
-      })
-      for (const pid of it.assigneeIds) {
-        await tx.itemAssignment.create({ data: { itemId: item.id, personId: pid } })
-      }
-    }
-  } else {
-    for (const p of input.participants) {
-      await tx.expenseParticipant.create({
-        data: { expenseId, personId: p.personId, exactAmountCents: p.exactAmountCents },
-      })
-    }
-  }
-}
-

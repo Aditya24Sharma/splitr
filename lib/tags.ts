@@ -28,3 +28,9 @@ export async function unknownTags(
   const found = new Set((await db.tag.findMany({ where: { name: { in: names } } })).map(t => t.name))
   return names.filter(n => !found.has(n))
 }
+
+/** Ids of these (existing) tags, for writing an expense's tag links directly. */
+export async function tagIds(db: Pick<PrismaClient, 'tag'>, names: string[]): Promise<string[]> {
+  if (names.length === 0) return []
+  return (await db.tag.findMany({ where: { name: { in: names } }, select: { id: true } })).map(t => t.id)
+}

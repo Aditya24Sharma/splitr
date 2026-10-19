@@ -1,49 +1,31 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
-import { SelectionBar } from "@/components/SelectionBar";
-import { PersonChip } from "@/components/PersonChip";
+import { BankLogo } from "@/components/BankLogo";
+import { SyncButton } from "@/components/SyncButton";
 import { formatUSD } from "@/lib/money";
-import { settleExpenses } from "@/lib/settle";
 import {
-  filterExpenses,
-  expenseDay,
-  NO_FILTERS,
-  type ExpenseFilters,
-} from "@/lib/expense-filter";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface Person {
-  id: string;
-  name: string;
-  colorHex: string;
-  isDefault: boolean;
-  archived: boolean;
-}
-
-interface ExpenseListItem {
-  id: string;
-  type: "ITEMIZED" | "SIMPLE";
-  description: string | null;
-  store: string | null;
-  totalCents: number;
-  payerId: string;
-  payer: Person;
-  loggedToSplitwise: boolean;
-  purchasedAt: string | null;
-  createdAt: string;
-  tags: string[];
-  itemNames: string[];
-  breakdown: {
-    perPerson: { personId: string; cents: number }[];
-  };
-}
+  categoryColor,
+  categoryLabel,
+  isMoneyMoving,
+  isSpending,
+  netBalance,
+  shiftMonth,
+  summarizeMonth,
+  todayLocal,
+} from "@/lib/spending";
+import { txLabel, type TxView } from "@/lib/transactions";
+import {
+  accountLabel,
+  indexAccounts,
+  lastSynced,
+  timeAgo,
+  type AccountRef,
+  type AccountsResponse,
+} from "@/lib/bank-types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,317 +36,190 @@ function localDate(day: string): Date {
   return new Date(`${day}T00:00`);
 }
 
-function shortDate(day: string): string {
-  return localDate(day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function monthName(month: string, withYear = true): string {
+  return localDate(`${month}-01`).toLocaleDateString("en-US", {
+    month: "long",
+    ...(withYear && { year: "numeric" }),
+  });
 }
 
-function monthLabel(day: string): string {
-  return localDate(day).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+type Show = "all" | "spending" | "unsplit" | "in";
+
+const SHOW_OPTIONS: [Show, string][] = [
+  ["all", "All"],
+  ["spending", "Spending"],
+  ["unsplit", "Not split"],
+  ["in", "Money in"],
+];
+
+// The month and filters survive opening a transaction and coming back.
+// sessionStorage lasts as long as the browser tab.
+const MONEY_STATE_KEY = "splitr.money";
+
+interface SavedMoneyState {
+  month: string;
+  query: string;
+  category: string | null;
+  show: Show;
 }
 
-// Filters, the open panel, and ticks survive opening an expense and coming
-// back. sessionStorage lasts as long as the browser tab.
-const HOME_STATE_KEY = "splitr.home";
-
-interface SavedHomeState {
-  filters: ExpenseFilters;
-  filtersOpen: boolean;
-  selectedIds: string[];
-}
-
-function readHomeState(): SavedHomeState | null {
+function readMoneyState(): Partial<SavedMoneyState> | null {
   try {
-    const raw = sessionStorage.getItem(HOME_STATE_KEY);
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as Partial<SavedHomeState>;
-    return {
-      // Spread over the defaults so a state saved by an older version still works
-      filters: { ...NO_FILTERS, ...saved.filters },
-      filtersOpen: saved.filtersOpen === true,
-      selectedIds: Array.isArray(saved.selectedIds) ? saved.selectedIds : [],
-    };
+    const raw = sessionStorage.getItem(MONEY_STATE_KEY);
+    return raw ? (JSON.parse(raw) as Partial<SavedMoneyState>) : null;
   } catch {
     return null;
   }
 }
 
-/** A round tick box; a real button so it works with the keyboard */
-function Tick({
-  checked,
-  onToggle,
-  label,
-}: {
-  checked: boolean | "mixed";
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onToggle}
-      className={[
-        "w-6 h-6 shrink-0 rounded-full border border-ink inline-flex items-center justify-center text-xs font-bold transition-colors",
-        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
-        checked ? "bg-ink text-white" : "bg-surface text-transparent hover:bg-sun",
-      ].join(" ")}
-    >
-      {checked === "mixed" ? "–" : "✓"}
-    </button>
-  );
+async function fetchMoney(): Promise<[TxView[], AccountsResponse]> {
+  const [txRes, bankRes] = await Promise.all([fetch("/api/transactions"), fetch("/api/accounts")]);
+  if (!txRes.ok) throw new Error(`Failed to load transactions (HTTP ${txRes.status})`);
+  if (!bankRes.ok) throw new Error(`Failed to load banks (HTTP ${bankRes.status})`);
+  return Promise.all([txRes.json() as Promise<TxView[]>, bankRes.json() as Promise<AccountsResponse>]);
 }
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
-export default function HomePage() {
-  const [expenses, setExpenses] = useState<ExpenseListItem[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">(
-    "loading"
-  );
+export default function MoneyPage() {
+  const [txs, setTxs] = useState<TxView[]>([]);
+  const [banks, setBanks] = useState<AccountsResponse>({ plaidConfigured: false, items: [] });
+  const [loadState, setLoadState] = useState<"loading" | "error" | "ready">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<ExpenseFilters>(NO_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [month, setMonth] = useState(() => todayLocal().slice(0, 7));
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [show, setShow] = useState<Show>("all");
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  // Every tag on the Tags page (for bulk tagging), not just ones in use
-  const [tagList, setTagList] = useState<string[]>([]);
 
-  const personById = useMemo(
-    () => new Map(people.map((p) => [p.id, p])),
-    [people]
-  );
-
-  const allTags = useMemo(
-    () => [...new Set(expenses.flatMap((e) => e.tags))].sort(),
-    [expenses],
-  );
-  const visible = useMemo(
-    () => filterExpenses(expenses, filters),
-    [expenses, filters]
-  );
-  // Only ticked expenses that are currently shown count toward the bar
-  const selectedExpenses = useMemo(
-    () => visible.map((m) => m.expense).filter((e) => selectedIds.has(e.id)),
-    [visible, selectedIds]
-  );
-  const debts = useMemo(
-    () =>
-      settleExpenses(
-        selectedExpenses.map((e) => ({
-          payerId: e.payerId,
-          perPerson: e.breakdown.perPerson,
-        }))
-      ),
-    [selectedExpenses]
-  );
-
-  const totalCents = expenses.reduce((sum, e) => sum + e.totalCents, 0);
-  const notLogged = expenses.filter((e) => !e.loggedToSplitwise).length;
-
-  // Visible expenses grouped under month headings (already newest first)
-  const groups = useMemo(() => {
-    const out: { month: string; rows: typeof visible }[] = [];
-    for (const m of visible) {
-      const month = monthLabel(expenseDay(m.expense));
-      if (out.at(-1)?.month !== month) out.push({ month, rows: [] });
-      out.at(-1)!.rows.push(m);
-    }
-    return out;
-  }, [visible]);
-
-  const allVisibleSelected =
-    visible.length > 0 && selectedExpenses.length === visible.length;
-
-  // Removable pills describing the active filters (search lives in its box)
-  const activePills: { key: string; label: string; clear: () => void }[] = [];
-  if (filters.from || filters.to) {
-    activePills.push({
-      key: "dates",
-      label: `${filters.from ? shortDate(filters.from) : "Start"} – ${filters.to ? shortDate(filters.to) : "now"}`,
-      clear: () => setFilters((f) => ({ ...f, from: "", to: "" })),
-    });
-  }
-  for (const id of filters.personIds) {
-    activePills.push({
-      key: `person-${id}`,
-      label: `With ${personName(id)}`,
-      clear: () => toggleIn("personIds", id),
-    });
-  }
-  for (const id of filters.payerIds) {
-    activePills.push({
-      key: `payer-${id}`,
-      label: `Paid by ${personName(id)}`,
-      clear: () => toggleIn("payerIds", id),
-    });
-  }
-  if (filters.logged !== "all") {
-    activePills.push({
-      key: "logged",
-      label: filters.logged === "logged" ? "Logged" : "Not logged",
-      clear: () => setFilter("logged", "all"),
-    });
-  }
-  for (const tag of filters.tags) {
-    activePills.push({ key: `tag-${tag}`, label: `#${tag}`, clear: () => toggleFilterTag(tag) });
-  }
-  const filterCount = activePills.length;
-
-  function toggleSelected(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds(
-      allVisibleSelected ? new Set() : new Set(visible.map((m) => m.expense.id))
-    );
-  }
-
-  function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  }
-
-  /** Adds or removes one value in a list-valued filter */
-  function toggleIn(key: "tags" | "personIds" | "payerIds", value: string) {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(value)
-        ? prev[key].filter((v) => v !== value)
-        : [...prev[key], value],
-    }));
-  }
-
-  function toggleFilterTag(tag: string) {
-    toggleIn("tags", tag);
-  }
-
-  /** Runs a bulk action on the ticked expenses, then reloads the list */
-  async function runBulk(action: Record<string, unknown>) {
-    const ids = selectedExpenses.map((e) => e.id);
-    const res = await fetch("/api/expenses/bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, ...action }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error((body as { error?: string }).error ?? `Error ${res.status}`);
-    }
-    if (action.action === "delete") setSelectedIds(new Set());
-    const listRes = await fetch("/api/expenses");
-    if (listRes.ok) setExpenses((await listRes.json()) as ExpenseListItem[]);
-  }
-
-  function personName(id: string): string {
-    return personById.get(id)?.name ?? id.slice(0, 6);
-  }
+  const reload = useCallback(() => {
+    fetchMoney()
+      .then(([txData, bankData]) => {
+        setTxs(txData);
+        setBanks(bankData);
+      })
+      .catch(() => {});
+  }, []);
 
   // loadState starts as "loading", so the effect only has to settle it
   useEffect(() => {
-    Promise.all([
-      fetch("/api/expenses").then((r) => {
-        if (!r.ok) throw new Error(`Failed to load expenses (HTTP ${r.status})`);
-        return r.json() as Promise<ExpenseListItem[]>;
-      }),
-      fetch("/api/people").then((r) => {
-        if (!r.ok) return [] as Person[];
-        return r.json() as Promise<Person[]>;
-      }),
-      fetch("/api/tags").then((r) => {
-        if (!r.ok) return [] as { name: string }[];
-        return r.json() as Promise<{ name: string }[]>;
-      }),
-    ])
-      .then(([exp, ppl, tgs]) => {
-        setExpenses(exp);
-        setPeople(ppl);
-        setTagList(tgs.map((t) => t.name));
-        const saved = readHomeState();
-        if (saved) {
-          setFilters(saved.filters);
-          setFiltersOpen(saved.filtersOpen);
-          setSelectedIds(new Set(saved.selectedIds));
+    fetchMoney()
+      .then(([txData, bankData]) => {
+        setTxs(txData);
+        setBanks(bankData);
+        const saved = readMoneyState();
+        if (saved?.month) {
+          setMonth(saved.month);
+          setQuery(saved.query ?? "");
+          setCategory(saved.category ?? null);
+          setShow(saved.show ?? "all");
+        } else if (txData.length > 0) {
+          // Open on the newest month with activity, not an empty one
+          const current = todayLocal().slice(0, 7);
+          const newest = txData[0].date.slice(0, 7);
+          if (!txData.some((t) => t.date.startsWith(current))) setMonth(newest);
         }
         setLoadState("ready");
       })
       .catch((err) => {
-        setLoadError(
-          err instanceof Error ? err.message : "An unexpected error occurred."
-        );
+        setLoadError(err instanceof Error ? err.message : "An unexpected error occurred.");
         setLoadState("error");
       });
   }, []);
 
-  // "/" jumps to search; Esc closes the filter panel (the selection bar
-  // handles Esc itself while anything is ticked)
-  const hasSelection = selectedExpenses.length > 0;
+  // Save only once loaded, so the defaults never overwrite what was restored
+  useEffect(() => {
+    if (loadState !== "ready") return;
+    const state: SavedMoneyState = { month, query, category, show };
+    try {
+      sessionStorage.setItem(MONEY_STATE_KEY, JSON.stringify(state));
+    } catch {
+      // Storage full or disabled; remembering is a nicety, so ignore
+    }
+  }, [loadState, month, query, category, show]);
+
+  // "/" jumps to search, like on Splits
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      const typing =
-        target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      const typing = target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
       if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         searchRef.current?.focus();
-      } else if (e.key === "Escape" && !hasSelection) {
-        setFiltersOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasSelection]);
+  }, []);
 
-  // Save only once loaded, so the defaults never overwrite what was restored
-  useEffect(() => {
-    if (loadState !== "ready") return;
-    const state: SavedHomeState = { filters, filtersOpen, selectedIds: [...selectedIds] };
-    try {
-      sessionStorage.setItem(HOME_STATE_KEY, JSON.stringify(state));
-    } catch {
-      // Storage full or disabled; remembering is a nicety, so ignore
-    }
-  }, [loadState, filters, filtersOpen, selectedIds]);
+  // ---------------------------------------------------------------------------
+  // Derived values
+  // ---------------------------------------------------------------------------
+
+  const accounts = useMemo(() => indexAccounts(banks.items), [banks.items]);
+  const summary = useMemo(
+    () =>
+      summarizeMonth(
+        txs.map((t) => ({ ...t, owedBackCents: t.split?.owedBackCents ?? 0 })),
+        month
+      ),
+    [txs, month]
+  );
+  const net = useMemo(() => netBalance(banks.items.flatMap((i) => i.accounts)), [banks.items]);
+  const synced = useMemo(() => lastSynced(banks.items), [banks.items]);
+  const thisMonth = todayLocal().slice(0, 7);
+  const oldestMonth = txs.at(-1)?.date.slice(0, 7) ?? thisMonth;
+
+  // Searching looks across every month; otherwise the list follows the month
+  const q = query.trim().toLowerCase();
+  const visible = useMemo(
+    () =>
+      txs.filter((t) => {
+        if (q) {
+          const hay = `${t.merchantName ?? ""} ${t.name}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        } else if (!t.date.startsWith(month)) return false;
+        if (category && t.categoryPrimary !== category) return false;
+        if (show === "spending" && !isSpending(t)) return false;
+        if (show === "unsplit" && (!isSpending(t) || t.split)) return false;
+        if (show === "in" && (t.amount >= 0 || isMoneyMoving(t))) return false;
+        return true;
+      }),
+    [txs, q, month, category, show]
+  );
+
+  const maxCategory = summary.byCategory[0]?.cents ?? 0;
+  const categories = showAllCategories ? summary.byCategory : summary.byCategory.slice(0, 6);
+  const hasBanks = banks.items.length > 0;
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-9">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header>
-        <h1 className="font-display text-6xl sm:text-7xl uppercase">Expenses</h1>
-        {loadState === "ready" && expenses.length > 0 && (
-          <p className="mt-3 text-sm text-ink-muted">
-            {expenses.length} expense{expenses.length === 1 ? "" : "s"} ·{" "}
-            <span className="text-ink font-semibold tabular-nums">{formatUSD(totalCents)}</span>
-            {notLogged > 0 && (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  onClick={() => setFilter("logged", "not-logged")}
-                  className="underline underline-offset-4 hover:text-ink"
-                >
-                  {notLogged} not in Splitwise yet
-                </button>
-              </>
+      <header className="space-y-4">
+        <h1 className="font-display text-6xl sm:text-7xl uppercase">Money</h1>
+        {loadState === "ready" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/transactions/new">
+              <Button variant="primary">+ Add expense</Button>
+            </Link>
+            {hasBanks && (
+              <SyncButton onSynced={reload} />
             )}
-          </p>
+            {synced && (
+              <span className="text-sm text-ink-muted">Banks updated {timeAgo(synced)}</span>
+            )}
+          </div>
         )}
       </header>
 
-      {/* ── Loading / error ─────────────────────────────────────────────── */}
       {loadState === "loading" && <p className="text-sm text-ink-faint">Loading…</p>}
 
       {loadState === "error" && (
@@ -379,24 +234,148 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Empty state ─────────────────────────────────────────────────── */}
-      {loadState === "ready" && expenses.length === 0 && (
+      {/* ── First run ───────────────────────────────────────────────────── */}
+      {loadState === "ready" && txs.length === 0 && (
         <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
-          <p className="font-display text-4xl uppercase">Nothing to split yet</p>
-          <p className="mt-3 text-sm text-ink-muted">
-            Add a quick split or scan a receipt to get started.
+          <p className="font-display text-4xl uppercase">Track your money</p>
+          <p className="mt-3 text-sm text-ink-muted max-w-[42ch] mx-auto">
+            Link a bank to pull in your spending automatically, or add an expense by hand. Any
+            charge can be split with friends in one tap.
           </p>
-          <Link href="/expenses/new" className="inline-block mt-6">
-            <Button variant="primary">+ New expense</Button>
-          </Link>
+          <div className="mt-6 flex justify-center gap-2 flex-wrap">
+            <Link href="/accounts">
+              <Button variant="primary">Link a bank</Button>
+            </Link>
+            <Link href="/transactions/new">
+              <Button variant="secondary">Add expense</Button>
+            </Link>
+          </div>
         </div>
       )}
 
-      {/* ── Search + filters ────────────────────────────────────────────── */}
-      {loadState === "ready" && expenses.length > 0 && (
-        <section className="space-y-3" aria-label="Search and filter">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+      {loadState === "ready" && txs.length > 0 && (
+        <>
+          {/* ── Month summary ─────────────────────────────────────────────── */}
+          <section aria-label={`Summary for ${monthName(month)}`} className="space-y-3">
+            <div className="rounded-3xl border border-ink bg-sky px-6 pt-4 pb-6">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMonth((m) => shiftMonth(m, -1))}
+                  disabled={month <= oldestMonth}
+                  aria-label="Previous month"
+                  className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  ‹
+                </button>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em]">{monthName(month)}</p>
+                <button
+                  type="button"
+                  onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                  disabled={month >= thisMonth}
+                  aria-label="Next month"
+                  className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  ›
+                </button>
+              </div>
+
+              <p className="mt-4 text-sm font-semibold">Spent</p>
+              <p className="font-display text-7xl sm:text-8xl tabular-nums leading-none">
+                {formatUSD(summary.spentCents)}
+              </p>
+              {summary.owedBackCents > 0 ? (
+                <p className="mt-3 text-sm">
+                  <span className="font-semibold tabular-nums">{formatUSD(summary.owedBackCents)}</span>{" "}
+                  coming back from splits · your share{" "}
+                  <span className="font-semibold tabular-nums">{formatUSD(summary.yourShareCents)}</span>
+                </p>
+              ) : (
+                summary.spentCents > 0 && (
+                  <p className="mt-3 text-sm text-ink-muted">
+                    Paid for friends? Tap <span className="font-semibold text-ink">Split</span> on a
+                    charge and it comes off what you spent.
+                  </p>
+                )
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-3xl border border-ink bg-mint-dim px-5 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em]">Money in</p>
+                <p className="mt-1 font-display text-3xl sm:text-4xl tabular-nums">
+                  {formatUSD(summary.incomeCents)}
+                </p>
+              </div>
+              <Link
+                href="/accounts"
+                className="group rounded-3xl border border-ink bg-lavender px-5 py-4 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] flex justify-between">
+                  Net balance
+                  <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
+                </p>
+                <p className="mt-1 font-display text-3xl sm:text-4xl tabular-nums">
+                  {hasBanks ? formatUSD(net) : "—"}
+                </p>
+              </Link>
+            </div>
+          </section>
+
+          {/* ── Where it went ─────────────────────────────────────────────── */}
+          {summary.byCategory.length > 0 && (
+            <section aria-labelledby="where-heading" className="space-y-3">
+              <div className="flex items-baseline justify-between px-1">
+                <h2 id="where-heading" className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                  Where it went
+                </h2>
+                <p className="text-xs text-ink-muted">Your share · tap to filter</p>
+              </div>
+              <ul className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
+                {categories.map(({ category: c, cents }) => {
+                  const on = category === c;
+                  return (
+                    <li key={c ?? "none"}>
+                      <button
+                        type="button"
+                        onClick={() => setCategory(on ? null : c)}
+                        aria-pressed={on}
+                        className={[
+                          "w-full grid grid-cols-[7.5rem_1fr_auto] sm:grid-cols-[10rem_1fr_6.5rem] items-center gap-3 px-5 py-3 text-left transition-colors",
+                          on ? "bg-sun/40" : "bg-surface hover:bg-mist",
+                        ].join(" ")}
+                      >
+                        <span className="text-sm font-semibold truncate">{categoryLabel(c)}</span>
+                        <span className="h-3.5 rounded-full bg-mist overflow-hidden">
+                          <span
+                            className="block h-full rounded-full border border-ink"
+                            style={{
+                              width: `${Math.max(4, (cents / maxCategory) * 100)}%`,
+                              backgroundColor: categoryColor(c),
+                            }}
+                          />
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-right">{formatUSD(cents)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {summary.byCategory.length > 6 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCategories((v) => !v)}
+                  className="px-1 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
+                >
+                  {showAllCategories ? "Show fewer" : `Show all ${summary.byCategory.length}`}
+                </button>
+              )}
+            </section>
+          )}
+
+          {/* ── Transactions ──────────────────────────────────────────────── */}
+          <section aria-label="Transactions" className="space-y-3">
+            <div className="relative">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 20 20"
@@ -411,13 +390,13 @@ export default function HomePage() {
               <Input
                 ref={searchRef}
                 type="search"
-                value={filters.query}
-                onChange={(e) => setFilter("query", e.target.value)}
-                placeholder="Search expenses or items"
-                aria-label="Search expenses and items by name"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search all transactions"
+                aria-label="Search transactions by name"
                 className="pl-10 sm:pr-12"
               />
-              {!filters.query && (
+              {!query && (
                 <kbd
                   aria-hidden="true"
                   className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 items-center justify-center rounded-md border border-rim text-xs font-semibold text-ink-muted pointer-events-none"
@@ -426,256 +405,158 @@ export default function HomePage() {
                 </kbd>
               )}
             </div>
-            <Button
-              variant={filtersOpen ? "primary" : "secondary"}
-              onClick={() => setFiltersOpen((o) => !o)}
-              aria-expanded={filtersOpen}
-            >
-              Filter{filterCount > 0 ? ` · ${filterCount}` : ""}
-            </Button>
-          </div>
 
-          {filtersOpen && (
-            <div className="rise rounded-3xl border border-ink bg-mist p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5 text-xs font-semibold">
-                  From
-                  <Input
-                    type="date"
-                    value={filters.from}
-                    onChange={(e) => setFilter("from", e.target.value)}
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5 text-xs font-semibold">
-                  To
-                  <Input
-                    type="date"
-                    value={filters.to}
-                    onChange={(e) => setFilter("to", e.target.value)}
-                  />
-                </label>
-              </div>
-
-              {(
-                [
-                  ["personIds", "Includes", "everyone picked"],
-                  ["payerIds", "Paid by", "any of them"],
-                ] as const
-              ).map(([key, title, rule]) => (
-                <div key={key} className="space-y-1.5">
-                  <p className="text-xs font-semibold">
-                    {title} <span className="font-normal text-ink-muted">· {rule}</span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {people.map((p) => (
-                      <PersonChip
-                        key={p.id}
-                        name={p.name}
-                        colorHex={p.colorHex}
-                        size="sm"
-                        selected={filters[key].includes(p.id)}
-                        onClick={() => toggleIn(key, p.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold">Splitwise</p>
-                <div className="flex gap-1.5">
-                  {(
-                    [
-                      ["all", "All"],
-                      ["not-logged", "Not logged"],
-                      ["logged", "Logged"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setFilter("logged", value)}
-                      aria-pressed={filters.logged === value}
-                      className={[
-                        "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
-                        filters.logged === value ? "bg-ink text-white" : "bg-surface hover:bg-sun",
-                      ].join(" ")}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {allTags.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold">
-                    Tags <span className="font-normal text-ink-muted">· any of them</span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allTags.map((tag) => {
-                      const on = filters.tags.includes(tag);
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => toggleFilterTag(tag)}
-                          aria-pressed={on}
-                          className={[
-                            "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
-                            on ? "bg-ink text-white" : "bg-surface hover:bg-sun",
-                          ].join(" ")}
-                        >
-                          #{tag}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activePills.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {activePills.map((p) => (
+            <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Show">
+              {SHOW_OPTIONS.map(([value, label]) => (
                 <button
-                  key={p.key}
+                  key={value}
                   type="button"
-                  onClick={p.clear}
-                  className="h-8 pl-3.5 pr-2.5 rounded-full border border-ink bg-sun text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-surface transition-colors"
-                  aria-label={`Remove filter ${p.label}`}
+                  role="radio"
+                  aria-checked={show === value}
+                  onClick={() => setShow(value)}
+                  className={[
+                    "h-8 px-3.5 rounded-full border border-ink text-sm font-semibold transition-colors",
+                    show === value ? "bg-ink text-white" : "bg-surface hover:bg-sun",
+                  ].join(" ")}
                 >
-                  {p.label}
-                  <span aria-hidden="true" className="text-base leading-none">×</span>
+                  {label}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => setFilters((f) => ({ ...NO_FILTERS, query: f.query }))}
-                className="h-8 px-2 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
-              >
-                Clear all
-              </button>
+              {category !== null && (
+                <button
+                  type="button"
+                  onClick={() => setCategory(null)}
+                  className="h-8 pl-3.5 pr-2.5 rounded-full border border-ink bg-sun text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-surface transition-colors"
+                  aria-label={`Remove filter ${categoryLabel(category)}`}
+                >
+                  {categoryLabel(category)}
+                  <span aria-hidden="true" className="text-base leading-none">×</span>
+                </button>
+              )}
             </div>
-          )}
-        </section>
-      )}
 
-      {/* ── Expense list ────────────────────────────────────────────────── */}
-      {loadState === "ready" && expenses.length > 0 && visible.length === 0 && (
-        <div className="rounded-3xl border border-dashed border-ink px-6 py-10 text-center">
-          <p className="font-display text-3xl uppercase">No matches</p>
-          <button
-            type="button"
-            onClick={() => setFilters(NO_FILTERS)}
-            className="mt-3 text-sm font-semibold underline underline-offset-4"
-          >
-            Clear search and filters
-          </button>
-        </div>
-      )}
-
-      {loadState === "ready" && visible.length > 0 && (
-        <section aria-label="Expenses">
-          <div className="flex items-center gap-3 px-4 pb-3">
-            <Tick
-              checked={allVisibleSelected ? true : selectedExpenses.length > 0 ? "mixed" : false}
-              onToggle={toggleSelectAll}
-              label={allVisibleSelected ? "Deselect all" : "Select all shown"}
-            />
-            <p className="text-sm text-ink-muted">
-              {allVisibleSelected ? "All selected" : "Select all"}
-              {filterCount > 0 || filters.query ? ` · ${visible.length} shown` : ""}
+            <p className="px-1 pt-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              {q
+                ? `${visible.length} match${visible.length === 1 ? "" : "es"} across all months`
+                : `${monthName(month, false)} · ${visible.length} transaction${visible.length === 1 ? "" : "s"}`}
             </p>
-          </div>
 
-          <div className="space-y-6">
-            {groups.map(({ month, rows }) => (
-              <div key={month}>
-                <h2 className="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                  {month}
-                </h2>
-                <ul className="rounded-3xl border border-ink overflow-hidden divide-y divide-rim">
-                  {rows.map(({ expense: exp, matchedItems }, i) => {
-                    const label = exp.store || exp.description || "Expense";
-                    const payerName = exp.payer?.name ?? personName(exp.payerId);
-                    const day = localDate(expenseDay(exp));
-                    const selected = selectedIds.has(exp.id);
-                    return (
-                      <li
-                        key={exp.id}
-                        className={[
-                          "rise flex items-center gap-3 pl-4 pr-2 transition-colors",
-                          selected ? "bg-sun/40" : "bg-surface hover:bg-mist",
-                        ].join(" ")}
-                        style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
-                      >
-                        <Tick
-                          checked={selected}
-                          onToggle={() => toggleSelected(exp.id)}
-                          label={`Select ${label}`}
-                        />
-                        <Link
-                          href={`/expenses/${exp.id}`}
-                          className="flex-1 min-w-0 flex items-center gap-4 py-3.5 pr-3"
-                        >
-                          {/* Date */}
-                          <div className="w-10 shrink-0 text-center leading-none">
-                            <p className="font-display text-[26px] tabular-nums">{day.getDate()}</p>
-                            <p className="mt-1 text-[11px] font-semibold uppercase text-ink-muted">
-                              {day.toLocaleDateString("en-US", { month: "short" })}
-                            </p>
-                          </div>
-
-                          {/* Label + meta */}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate">{label}</p>
-                            <p className="mt-0.5 text-sm text-ink-muted truncate">
-                              {payerName} paid
-                              {exp.breakdown.perPerson.length > 1 &&
-                                ` · split ${exp.breakdown.perPerson.length} ways`}
-                              {exp.tags.length > 0 && ` · ${exp.tags.map((t) => `#${t}`).join(" ")}`}
-                            </p>
-                            {matchedItems.length > 0 && (
-                              <p className="mt-0.5 text-sm truncate">
-                                <span className="bg-sun px-1 rounded">{matchedItems.join(", ")}</span>
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Amount + status */}
-                          <div className="shrink-0 text-right">
-                            <p className="font-semibold tabular-nums">{formatUSD(exp.totalCents)}</p>
-                            {exp.loggedToSplitwise && (
-                              <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-ink-muted">
-                                <span className="w-2 h-2 rounded-full bg-mint" aria-hidden="true" />
-                                Logged
-                              </p>
-                            )}
-                          </div>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+            {visible.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-ink px-6 py-10 text-center">
+                <p className="font-display text-3xl uppercase">
+                  {q || category || show !== "all" ? "No matches" : `Nothing in ${monthName(month, false)}`}
+                </p>
+                {q || category || show !== "all" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      setCategory(null);
+                      setShow("all");
+                    }}
+                    className="mt-3 text-sm font-semibold underline underline-offset-4"
+                  >
+                    Clear search and filters
+                  </button>
+                ) : (
+                  <p className="mt-3 text-sm text-ink-muted">
+                    {hasBanks ? "Sync to pull in new charges, or add one by hand." : "Add an expense to get going."}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Selection bar ───────────────────────────────────────────────── */}
-      {selectedExpenses.length > 0 && (
-        <SelectionBar
-          selected={selectedExpenses}
-          debts={debts}
-          tagList={tagList}
-          personName={personName}
-          onBulk={runBulk}
-          onClear={() => setSelectedIds(new Set())}
-        />
+            ) : (
+              <ul className="rounded-3xl border border-ink overflow-hidden divide-y divide-rim">
+                {visible.map((t, i) => (
+                  <TxRow
+                    key={t.id}
+                    tx={t}
+                    index={i}
+                    account={t.accountId != null ? accounts.get(t.accountId) : undefined}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Row
+// ---------------------------------------------------------------------------
+
+function TxRow({
+  tx,
+  index,
+  account,
+}: {
+  tx: TxView;
+  index: number;
+  account: AccountRef | undefined;
+}) {
+  const day = localDate(tx.date);
+  const label = txLabel(tx);
+  const moving = isMoneyMoving(tx);
+  const moneyIn = tx.amount < 0;
+  const canSplit = isSpending(tx) && !tx.split;
+
+  return (
+    <li
+      className="rise flex items-center gap-3 pl-4 pr-3 bg-surface hover:bg-mist transition-colors"
+      style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }}
+    >
+      <Link href={`/transactions/${tx.id}`} className="flex-1 min-w-0 flex items-center gap-3.5 py-3.5">
+        {/* Date */}
+        <div className="w-9 shrink-0 text-center leading-none">
+          <p className="font-display text-[26px] tabular-nums">{day.getDate()}</p>
+          <p className="mt-1 text-[11px] font-semibold uppercase text-ink-muted">
+            {day.toLocaleDateString("en-US", { month: "short" })}
+          </p>
+        </div>
+
+        {/* The bank is also named in the meta line, so phones skip the logo */}
+        <span className="hidden sm:inline-flex">
+          <BankLogo item={account?.item} />
+        </span>
+
+        {/* Label + meta */}
+        <div className="flex-1 min-w-0">
+          <p className={`font-semibold truncate ${moving ? "text-ink-muted" : ""}`}>{label}</p>
+          <p className="mt-0.5 text-sm text-ink-muted truncate">
+            {categoryLabel(tx.categoryPrimary)} · {accountLabel(account)}
+            {tx.pending && " · Pending"}
+          </p>
+        </div>
+
+        {/* Amount + split state */}
+        <div className="shrink-0 text-right">
+          <p
+            className={[
+              "font-semibold tabular-nums",
+              moneyIn && !moving ? "text-income" : moving ? "text-ink-muted" : "",
+            ].join(" ")}
+          >
+            {moneyIn ? `+${formatUSD(-tx.amount)}` : formatUSD(tx.amount)}
+          </p>
+          {tx.split && (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-mint-dim border border-mint px-2 py-0.5 text-xs font-semibold">
+              Split {tx.split.ways} ways · {formatUSD(tx.split.owedBackCents)} back
+            </p>
+          )}
+        </div>
+      </Link>
+
+      {canSplit && (
+        <Link
+          href={`/expenses/new?fromTx=${tx.id}`}
+          aria-label={`Split ${label}`}
+          className="shrink-0 h-8 px-3 rounded-full border border-ink text-sm font-semibold inline-flex items-center hover:bg-sun transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun"
+        >
+          Split
+        </Link>
+      )}
+    </li>
   );
 }

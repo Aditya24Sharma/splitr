@@ -14,6 +14,7 @@ interface Person {
   name: string;
   colorHex: string;
   isDefault: boolean;
+  isMe: boolean;
   archived: boolean;
 }
 
@@ -114,6 +115,7 @@ export default function PeoplePage() {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [editDefault, setEditDefault] = useState(false);
+  const [editMe, setEditMe] = useState(false);
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editNameTouched, setEditNameTouched] = useState(false);
@@ -201,6 +203,7 @@ export default function PeoplePage() {
     setEditName(person.name);
     setEditColor(person.colorHex);
     setEditDefault(person.isDefault);
+    setEditMe(person.isMe);
     setEditError(null);
     setEditNameTouched(false);
     setArchiveId(null);
@@ -228,6 +231,7 @@ export default function PeoplePage() {
           name: editName.trim(),
           colorHex: editColor,
           isDefault: editDefault,
+          isMe: editMe,
         }),
       });
       if (!res.ok) {
@@ -282,6 +286,13 @@ export default function PeoplePage() {
         <p className="mt-3 text-sm text-ink-muted">
           Who you split with. Roommates are ticked automatically on new expenses.
         </p>
+        {loadState === "ready" && people.length > 0 && !people.some((p) => p.isMe) && (
+          <p className="mt-3 text-sm rounded-2xl border border-ink bg-sun/40 px-4 py-2.5">
+            Tap <span className="font-semibold">Edit</span> on yourself and tick{" "}
+            <span className="font-semibold">This is me</span>, so splits from your bank charges
+            start with you as the payer.
+          </p>
+        )}
       </div>
 
       {/* ---- People list ---- */}
@@ -366,6 +377,15 @@ export default function PeoplePage() {
                       />
                       Roommate (ticked by default)
                     </label>
+                    <label className="mt-2 flex items-center gap-2 text-sm text-ink cursor-pointer select-none w-fit">
+                      <input
+                        type="checkbox"
+                        checked={editMe}
+                        onChange={(e) => setEditMe(e.target.checked)}
+                        className="w-5 h-5 accent-[#0B0B0C]"
+                      />
+                      This is me (picked as the payer when you split a bank charge)
+                    </label>
 
                     {/* Actions */}
                     <div className="mt-4 flex items-center gap-2">
@@ -400,6 +420,11 @@ export default function PeoplePage() {
                     />
 
 
+                    {person.isMe && (
+                      <span className="text-xs font-semibold bg-sun border border-ink rounded-full px-2.5 py-0.5 shrink-0">
+                        You
+                      </span>
+                    )}
                     {person.isDefault && (
                       <span className="text-xs font-semibold bg-mint-dim border border-mint rounded-full px-2.5 py-0.5 shrink-0">
                         Roommate

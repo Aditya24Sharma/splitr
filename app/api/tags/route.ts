@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/db'
+import { getDb } from '@/lib/db'
 import { normalizeTag } from '@/lib/tags'
 
 // ---------------------------------------------------------------------------
 // GET /api/tags  — every tag, with how many expenses use it
 // ---------------------------------------------------------------------------
 export async function GET() {
+  const prisma = getDb()
   const tags = await prisma.tag.findMany({
     orderBy: { name: 'asc' },
     include: { _count: { select: { expenses: true } } },
@@ -18,6 +19,7 @@ export async function GET() {
 // POST /api/tags  — { name }
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
+  const prisma = getDb()
   let body: unknown
   try {
     body = await req.json()

@@ -1,13 +1,18 @@
+import { cache } from 'react'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import { PrismaD1 } from '@prisma/adapter-d1'
 
-const g = globalThis as unknown as { prisma?: PrismaClient }
-
-function createClient(): PrismaClient {
-  const url = process.env.DATABASE_URL ?? 'file:./prisma/dev.db'
-  const adapter = new PrismaBetterSqlite3({ url })
-  return new PrismaClient({ adapter })
+/** The D1 database binding named DB in wrangler.jsonc. */
+export function getD1(): D1Database {
+  return getCloudflareContext().env.DB
 }
 
-export const prisma = g.prisma ?? createClient()
-if (process.env.NODE_ENV !== 'production') g.prisma = prisma
+/**
+ * A Prisma client for the current request. A Worker can't reuse a client
+ * across requests, so each request makes its own (shared within it).
+ *
+ * D1 has no transactions: Prisma runs `$transaction` steps one by one with
+ * no rollback. Writes that must be all-or-nothing go through `getD1().batch`.
+ */
+export const getDb = cache(() => new PrismaClient({ adapter: new PrismaD1(getD1()) }))

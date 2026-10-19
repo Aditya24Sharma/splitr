@@ -43,6 +43,14 @@ interface Expense {
     assignments: { personId: string }[];
   }[];
   tags: string[];
+  /** The bank or hand-added charge this split was made from */
+  transaction: {
+    id: number;
+    date: string;
+    amount: number;
+    source: "PLAID" | "MANUAL";
+    account: { name: string; mask: string | null; item: { institutionName: string | null } } | null;
+  } | null;
   breakdown: {
     payerId: string;
     perPerson: { personId: string; cents: number }[];
@@ -203,7 +211,7 @@ export default function ExpenseDetailPage({
           (body as { error?: string }).error ?? `Error ${res.status}`
         );
       }
-      router.push("/");
+      router.push(expense.transaction ? `/transactions/${expense.transaction.id}` : "/splits");
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : "Delete failed — please try again"
@@ -249,8 +257,8 @@ export default function ExpenseDetailPage({
     return (
       <div className="py-16 space-y-4 text-center">
         <p className="font-display text-4xl uppercase">Expense not found</p>
-        <Link href="/">
-          <Button variant="secondary">Back to home</Button>
+        <Link href="/splits">
+          <Button variant="secondary">Back to splits</Button>
         </Link>
       </div>
     );
@@ -265,8 +273,8 @@ export default function ExpenseDetailPage({
         >
           {loadError ?? "Something went wrong."}
         </p>
-        <Link href="/">
-          <Button variant="secondary">Back to home</Button>
+        <Link href="/splits">
+          <Button variant="secondary">Back to splits</Button>
         </Link>
       </div>
     );
@@ -290,10 +298,10 @@ export default function ExpenseDetailPage({
   return (
     <div className="space-y-8">
       <Link
-        href="/"
+        href="/splits"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink transition-colors"
       >
-        ← Expenses
+        ← Splits
       </Link>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -316,6 +324,27 @@ export default function ExpenseDetailPage({
           </div>
         </div>
       </header>
+
+      {/* ── Source charge ───────────────────────────────────────────────── */}
+      {expense.transaction && (
+        <Link
+          href={`/transactions/${expense.transaction.id}`}
+          className="flex items-center gap-3 rounded-3xl border border-ink bg-mist px-5 py-3 text-sm hover:bg-sun/40 transition-colors"
+        >
+          <span className="flex-1 min-w-0 truncate">
+            From your{" "}
+            <span className="font-semibold">
+              {expense.transaction.account
+                ? `${expense.transaction.account.item.institutionName ?? expense.transaction.account.name}${
+                    expense.transaction.account.mask ? ` •• ${expense.transaction.account.mask}` : ""
+                  }`
+                : "cash"}
+            </span>{" "}
+            charge of <span className="font-semibold tabular-nums">{formatUSD(expense.transaction.amount)}</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      )}
 
       {/* ── Actions ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">

@@ -43,3 +43,8 @@ next-env.d.ts
 
 # prisma
 prisma/dev.db*
+
+# cloudflare
+.open-next
+.wrangler
+.dev.vars*

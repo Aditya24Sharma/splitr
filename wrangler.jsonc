@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "splitr",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "splitr"
+    }
+  ],
+  // The app is only reachable at its own domain, where Cloudflare Access asks
+  // for a login. The default *.workers.dev and preview addresses would skip
+  // that login, so they stay off.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "money.aditya24sharma.dev",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "splitr",
+      "database_id": "8dca0d2b-ce1b-4a48-99b8-c037737cd0d9",
+      "migrations_dir": "prisma/migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
