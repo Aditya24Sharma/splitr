@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { txLabel, type TxView } from "@/lib/transactions";
 import { loadExpenseToEdit, loadSourceTx, peopleQuery, queryClient, useRefreshAll } from "../queries";
 import { BackLink } from "@/components/BackLink";
@@ -105,7 +106,6 @@ export default function NewItemizedPage() {
 
   // Save
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Load people
@@ -259,7 +259,6 @@ export default function NewItemizedPage() {
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
-    setSaveError(null);
 
     // Build the exact ITEMIZED body (all money in cents)
     const payload = {
@@ -299,9 +298,7 @@ export default function NewItemizedPage() {
         (body as { error?: string }).error ?? `Server error ${res.status}`
       );
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Save failed — please try again"
-      );
+      toast.error(err instanceof Error ? err.message : "Save failed. Try again.");
     } finally {
       setSaving(false);
     }
@@ -473,15 +470,6 @@ export default function NewItemizedPage() {
       <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
         <TagPicker value={tags} onChange={setTags} />
       </Section>
-
-      {saveError && (
-        <p
-          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
-          role="alert"
-        >
-          {saveError}
-        </p>
-      )}
 
       <SaveBar
         summary={

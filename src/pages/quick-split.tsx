@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
@@ -79,7 +80,6 @@ export default function NewSimplePage() {
 
   // Save state
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Load people
@@ -260,7 +260,6 @@ export default function NewSimplePage() {
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
-    setSaveError(null);
 
     const payload = {
       type: "SIMPLE" as const,
@@ -298,9 +297,7 @@ export default function NewSimplePage() {
         (body as { error?: string }).error ?? `Server error ${res.status}`
       );
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Save failed — please try again"
-      );
+      toast.error(err instanceof Error ? err.message : "Save failed. Try again.");
     } finally {
       setSaving(false);
     }
@@ -556,15 +553,6 @@ export default function NewSimplePage() {
       <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
         <TagPicker value={tags} onChange={setTags} />
       </Section>
-
-      {saveError && (
-        <p
-          className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3"
-          role="alert"
-        >
-          {saveError}
-        </p>
-      )}
 
       <SaveBar
         summary={
