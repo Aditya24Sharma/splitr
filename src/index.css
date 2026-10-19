@@ -137,3 +137,9 @@ input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
 }
+
+/* In landscape on a notched iPhone, keep content clear of the notch */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
