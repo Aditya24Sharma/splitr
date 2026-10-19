@@ -23,7 +23,7 @@ export default function BanksPage() {
       <header>
         <h1 className="font-display text-6xl sm:text-7xl uppercase">Banks</h1>
         <p className="mt-3 text-sm text-ink-muted">
-          Linked through Plaid. Syncing pulls new charges into Money.
+          Linked through Plaid.
         </p>
       </header>
 
@@ -50,10 +50,7 @@ export default function BanksPage() {
               <p className="mt-1 font-display text-7xl sm:text-8xl tabular-nums leading-none">
                 {formatUSD(netBalance(allAccounts))}
               </p>
-              <p className="mt-3 text-sm">
-                What you have minus what you owe on cards and loans
-                {synced && <span className="text-ink-muted"> · updated {timeAgo(synced)}</span>}
-              </p>
+              {synced && <p className="mt-3 text-sm text-ink-muted">Updated {timeAgo(synced)}</p>}
             </div>
           )}
 
