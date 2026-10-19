@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
 
 export interface SyncResult {
@@ -42,36 +43,30 @@ export function SyncButton({
   onSynced: (results: SyncResult[]) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function sync() {
     setBusy(true);
-    setStatus(null);
     try {
       const res = await fetch(itemId != null ? `/api/plaid/sync/${itemId}` : "/api/plaid/sync", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as { results?: SyncResult[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? `Sync failed (HTTP ${res.status})`);
       const results = data.results ?? [];
-      setStatus(syncStatus(results));
+      const status = syncStatus(results);
+      // One id for every sync, so pressing it again replaces the last result
+      if (status.ok) toast.success(status.text, { id: "sync" });
+      else toast.error(status.text, { id: "sync" });
       onSynced(results);
     } catch (err) {
-      setStatus({ ok: false, text: err instanceof Error ? err.message : "Sync failed" });
+      toast.error(err instanceof Error ? err.message : "Sync failed", { id: "sync" });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button variant={variant} size={size} onClick={sync} disabled={busy}>
-        <span aria-hidden="true" className={busy ? "inline-block animate-spin" : ""}>↻</span>
-        {busy ? "Syncing…" : label}
-      </Button>
-      {status && (
-        <span role="status" className={`text-sm ${status.ok ? "text-ink-muted" : "text-danger font-semibold"}`}>
-          {status.text}
-        </span>
-      )}
-    </span>
+    <Button variant={variant} size={size} onClick={sync} disabled={busy}>
+      <span aria-hidden="true" className={busy ? "inline-block animate-spin" : ""}>↻</span>
+      {busy ? "Syncing…" : label}
+    </Button>
   );
 }

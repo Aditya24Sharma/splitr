@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
+import { toast } from "sonner";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
 
 const LINK_TOKEN_KEY = "plaid:link_token";
@@ -99,6 +100,11 @@ export function PlaidLinkButton({
     [onLinked, receivedRedirectUri, itemId, oauthRedirect]
   );
 
+  // Shown as a toast; the same id, so two buttons on a page show it once
+  useEffect(() => {
+    if (error) toast.error(error, { id: "plaid-link" });
+  }, [error]);
+
   const { open, ready } = usePlaidLink({ token: linkToken, receivedRedirectUri, onSuccess });
 
   useEffect(() => {
@@ -118,15 +124,8 @@ export function PlaidLinkButton({
   }
 
   return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <Button variant={variant} size={size} onClick={openLink} disabled={!ready || !linkToken || linking}>
-        {linking ? "Linking…" : itemId != null ? "Reconnect" : "+ Link a bank"}
-      </Button>
-      {error && (
-        <span role="alert" className="text-xs text-danger font-semibold">
-          {error}
-        </span>
-      )}
-    </span>
+    <Button variant={variant} size={size} onClick={openLink} disabled={!ready || !linkToken || linking}>
+      {linking ? "Linking…" : itemId != null ? "Reconnect" : "+ Link a bank"}
+    </Button>
   );
 }
