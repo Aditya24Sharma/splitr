@@ -149,6 +149,15 @@ export const plaid = {
   itemRemove: (accessToken: string) => call<object>('/item/remove', { access_token: accessToken }),
 }
 
+/**
+ * The reason, as one line of text. Workers Logs keeps only the stack of an
+ * Error passed to console.error, not its message, so log lines carry this.
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof PlaidApiError) return `${error.code}: ${error.message}`
+  return error instanceof Error ? error.message : String(error)
+}
+
 export function plaidRedirectUri(): string | undefined {
   return process.env.PLAID_REDIRECT_URI?.trim() || undefined
 }

@@ -4,7 +4,7 @@ import type { AppEnv } from '../app'
 import { getDb } from '../db'
 import { account, plaidItem } from '../db/schema'
 import { readJson } from '../http'
-import { PlaidConfigError, plaid, plaidRedirectUri } from '../plaid'
+import { PlaidConfigError, describeError, plaid, plaidRedirectUri } from '../plaid'
 import { accountFields, syncAllItems, syncItem } from '../sync'
 
 export const plaidRoutes = new Hono<AppEnv>()
@@ -12,7 +12,7 @@ export const plaidRoutes = new Hono<AppEnv>()
 /** 503 for missing Plaid keys, otherwise a 500 with a safe message. */
 function plaidFailure(error: unknown, label: string, message: string) {
   if (error instanceof PlaidConfigError) return Response.json({ error: error.message }, { status: 503 })
-  console.error(`[plaid] ${label} failed`, error)
+  console.error(`[plaid] ${label} failed: ${describeError(error)}`, error)
   return Response.json({ error: message }, { status: 500 })
 }
 
@@ -99,7 +99,7 @@ plaidRoutes.delete('/items/:itemId', async (c) => {
     await plaid.itemRemove(item.accessToken)
   } catch (error) {
     if (error instanceof PlaidConfigError) return c.json({ error: error.message }, 503)
-    console.error(`[plaid] itemRemove ${id} failed`, error)
+    console.error(`[plaid] itemRemove ${id} failed: ${describeError(error)}`, error)
   }
 
   await db.delete(plaidItem).where(eq(plaidItem.id, id))
