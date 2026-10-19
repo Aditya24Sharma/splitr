@@ -100,13 +100,17 @@ export const expenseQuery = <T>(id: string) =>
   });
 
 /**
- * After any save: marks every cached read out of date. Pages on screen reload
- * now; others reload when next opened. Splits, charges, and totals depend on
- * each other, so refreshing everything is simplest and always correct.
+ * After any save. Splits, charges, and totals depend on each other, so every
+ * read is refreshed. The page on screen reloads in place; pages not on screen
+ * drop what they had, so the next one opened loads fresh rather than briefly
+ * showing what was just changed or deleted.
  */
 export function useRefreshAll(): () => Promise<void> {
   const client = useQueryClient();
-  return () => client.invalidateQueries();
+  return async () => {
+    client.removeQueries({ type: "inactive" });
+    await client.invalidateQueries({ type: "active" });
+  };
 }
 
 // ---------------------------------------------------------------------------
