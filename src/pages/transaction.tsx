@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { accountsQuery, expenseQuery, isNotFound, peopleQuery, transactionQuery, useRefreshAll } from "../queries";
 import { Chevron } from "@/components/Chevron";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
@@ -64,16 +65,13 @@ export default function TransactionPage() {
         ? "ready"
         : "loading";
 
-  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleCategory(next: string) {
     if (!tx || next === tx.categoryPrimary) return;
     const prev = tx;
     const key = transactionQuery(id).queryKey;
     client.setQueryData(key, { ...tx, categoryPrimary: next, categoryDetailed: null }); // optimistic
-    setCategoryError(null);
     try {
       const res = await fetch(`/api/transactions/${id}`, {
         method: "PATCH",
@@ -85,13 +83,12 @@ export default function TransactionPage() {
       refreshAll();
     } catch {
       client.setQueryData(key, prev); // revert
-      setCategoryError("Couldn’t save the category — please try again");
+      toast.error("Couldn’t save the category. Try again.");
     }
   }
 
   async function handleDelete() {
     setDeleting(true);
-    setDeleteError(null);
     try {
       const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -101,7 +98,7 @@ export default function TransactionPage() {
       goTo("/");
       refreshAll();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
+      toast.error(err instanceof Error ? err.message : "Delete failed. Try again.");
       setDeleting(false);
     }
   }
@@ -271,11 +268,6 @@ export default function TransactionPage() {
         hint={tx.source === "PLAID" ? "From your bank. Pick another if it’s wrong." : undefined}
       >
         <CategoryChips options={ALL_CATEGORIES} value={tx.categoryPrimary} onChange={handleCategory} />
-        {categoryError && (
-          <p className="text-xs text-danger" role="alert">
-            {categoryError}
-          </p>
-        )}
       </Section>
 
       {/* Bank charges come from the bank, so only hand-added ones can go */}
@@ -284,7 +276,6 @@ export default function TransactionPage() {
           label="Delete expense"
           question={tx.split ? "Delete? The split stays." : "Delete for good?"}
           deleting={deleting}
-          error={deleteError}
           onDelete={handleDelete}
         />
       )}

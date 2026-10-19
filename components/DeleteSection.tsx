@@ -9,7 +9,6 @@ export function DeleteSection({
   label,
   question,
   deleting,
-  error,
   onDelete,
 }: {
   /** e.g. "Delete split" */
@@ -17,14 +16,13 @@ export function DeleteSection({
   /** Asked before deleting, e.g. "Delete for good?" */
   question: string;
   deleting: boolean;
-  error: string | null;
-  /** Deletes and leaves the page; on failure the page sets `error` */
+  /** Deletes and leaves the page; on failure the page shows a toast */
   onDelete: () => Promise<void>;
 }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <section aria-label={label} className="pt-6 border-t border-rim space-y-3">
+    <section aria-label={label} className="pt-6 border-t border-rim">
       {!confirming ? (
         <Button variant="danger" size="sm" onClick={() => setConfirming(true)}>
           {label}
@@ -47,11 +45,6 @@ export function DeleteSection({
             Cancel
           </Button>
         </div>
-      )}
-      {error && (
-        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
-          {error}
-        </p>
       )}
     </section>
   );

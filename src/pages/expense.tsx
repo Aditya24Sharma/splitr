@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { expenseQuery, isNotFound, peopleQuery, useRefreshAll } from "../queries";
 import { Chevron } from "@/components/Chevron";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
@@ -106,7 +107,6 @@ export default function ExpenseDetailPage() {
   const logged = expense?.loggedToSplitwise ?? false;
   const [logPending, setLogPending] = useState(false);
   const tags = expense?.tags ?? NO_TAGS;
-  const [tagsError, setTagsError] = useState<string | null>(null);
 
   /** Writes a change into the cached split, for showing it before the save lands. */
   function patchCached(change: Partial<Expense>) {
@@ -115,7 +115,6 @@ export default function ExpenseDetailPage() {
 
   // Delete state
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -137,13 +136,11 @@ export default function ExpenseDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ loggedToSplitwise: newVal }),
       });
-      if (!res.ok) {
-        patchCached({ loggedToSplitwise: !newVal }); // revert
-      } else {
-        refreshAll(); // the Splits list and the charge show it too
-      }
+      if (!res.ok) throw new Error();
+      refreshAll(); // the Splits list and the charge show it too
     } catch {
       patchCached({ loggedToSplitwise: !newVal }); // revert
+      toast.error("Couldn’t update Splitwise status. Try again.");
     } finally {
       setLogPending(false);
     }
@@ -156,7 +153,6 @@ export default function ExpenseDetailPage() {
   async function handleTagsChange(next: string[]) {
     const prev = tags;
     patchCached({ tags: next }); // optimistic
-    setTagsError(null);
     try {
       const res = await fetch(`/api/expenses/${id}`, {
         method: "PATCH",
@@ -169,7 +165,7 @@ export default function ExpenseDetailPage() {
       refreshAll();
     } catch {
       patchCached({ tags: prev }); // revert
-      setTagsError("Couldn't save tags — please try again");
+      toast.error("Couldn’t save tags. Try again.");
     }
   }
 
@@ -180,7 +176,6 @@ export default function ExpenseDetailPage() {
   async function handleDelete() {
     if (!expense || deleting) return;
     setDeleting(true);
-    setDeleteError(null);
     try {
       const res = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -192,9 +187,7 @@ export default function ExpenseDetailPage() {
       goTo(expense.transaction ? `/transactions/${expense.transaction.id}` : "/splits");
       refreshAll();
     } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Delete failed — please try again"
-      );
+      toast.error(err instanceof Error ? err.message : "Delete failed. Try again.");
     } finally {
       setDeleting(false);
     }
@@ -421,18 +414,12 @@ export default function ExpenseDetailPage() {
           Tags
         </h2>
         <TagPicker value={tags} onChange={handleTagsChange} />
-        {tagsError && (
-          <p className="text-xs text-danger" role="alert">
-            {tagsError}
-          </p>
-        )}
       </section>
 
       <DeleteSection
         label="Delete split"
         question="Delete for good?"
         deleting={deleting}
-        error={deleteError}
         onDelete={handleDelete}
       />
     </div>
