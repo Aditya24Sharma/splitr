@@ -143,3 +143,14 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
+/* iPhone and iPad Safari zoom into a text field under 16px when it's tapped.
+   On touch screens, fields are at least 16px; larger ones (the big amount
+   fields) keep their size. Outside a layer, so it wins over text-sm. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
