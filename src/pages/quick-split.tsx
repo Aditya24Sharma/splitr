@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
@@ -350,12 +351,7 @@ export default function NewSimplePage() {
   return (
     <div className="space-y-9">
       <header>
-        <Link
-          href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
-        >
-          ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
-        </Link>
+        <BackLink href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"} label={editId ? "Back to expense" : fromTx ? "Back to split options" : "Back to New"} />
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit split" : "Quick split"}
         </h1>
@@ -434,7 +430,7 @@ export default function NewSimplePage() {
           {sourceTx && !people.some((p) => p.isMe) && (
             <p className="text-sm text-ink-muted">
               Pick yourself. To skip this next time, mark yourself as{" "}
-              <Link href="/people" className="font-semibold underline underline-offset-4">This is me</Link>.
+              <Link href="/people" className="tap-area font-semibold underline underline-offset-4">This is me</Link>.
             </p>
           )}
           </>

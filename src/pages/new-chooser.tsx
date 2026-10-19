@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { accountsQuery, transactionQuery } from "../queries";
+import { Chevron } from "@/components/Chevron";
+import { BackLink } from "@/components/BackLink";
 import Link, { useQueryString } from "@/components/Link";
 import { formatUSD } from "@/lib/money";
 import { accountLabel, indexAccounts } from "@/lib/bank-types";
@@ -45,12 +47,7 @@ export default function NewExpensePage() {
     <div className="space-y-8">
       <header>
         {tx && (
-          <Link
-            href={`/transactions/${tx.id}`}
-            className="text-sm font-semibold text-ink-muted hover:text-ink"
-          >
-            ← Back to charge
-          </Link>
+          <BackLink href={`/transactions/${tx.id}`} label="Back to charge" />
         )}
         <h1 className={`${tx ? "mt-4 " : ""}font-display text-6xl sm:text-7xl uppercase`}>
           {tx ? "Split it" : "New"}
@@ -100,9 +97,9 @@ export default function NewExpensePage() {
                 <p className="text-sm max-w-[26ch]">{c.body}</p>
                 <span
                   aria-hidden="true"
-                  className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center text-xl transition-transform group-hover:translate-x-1"
+                  className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
                 >
-                  →
+                  <Chevron direction="right" />
                 </span>
               </div>
             </Link>

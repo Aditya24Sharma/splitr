@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Chevron } from "@/components/Chevron";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -238,9 +239,9 @@ export default function MoneyPage() {
                   onClick={() => setPickedMonth(shiftMonth(month, -1))}
                   disabled={month <= oldestMonth}
                   aria-label="Previous month"
-                  className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="w-9 h-9 inline-flex items-center justify-center rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
-                  ‹
+                  <Chevron direction="left" className="w-4 h-4" />
                 </button>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em]">{monthName(month)}</p>
                 <button
@@ -248,9 +249,9 @@ export default function MoneyPage() {
                   onClick={() => setPickedMonth(shiftMonth(month, 1))}
                   disabled={month >= thisMonth}
                   aria-label="Next month"
-                  className="w-9 h-9 rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="w-9 h-9 inline-flex items-center justify-center rounded-full border border-ink bg-surface hover:bg-sun disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 >
-                  ›
+                  <Chevron direction="right" className="w-4 h-4" />
                 </button>
               </div>
 
@@ -287,7 +288,9 @@ export default function MoneyPage() {
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] flex justify-between">
                   Net balance
-                  <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
+                  <span className="transition-transform group-hover:translate-x-0.5">
+                    <Chevron direction="right" className="w-4 h-4" />
+                  </span>
                 </p>
                 <p className="mt-1 font-display text-3xl sm:text-4xl tabular-nums">
                   {hasBanks ? formatUSD(net) : "—"}
@@ -299,12 +302,9 @@ export default function MoneyPage() {
           {/* ── Where it went ─────────────────────────────────────────────── */}
           {summary.byCategory.length > 0 && (
             <section aria-labelledby="where-heading" className="space-y-3">
-              <div className="flex items-baseline justify-between px-1">
-                <h2 id="where-heading" className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                  Where it went
-                </h2>
-                <p className="text-xs text-ink-muted">Your share · tap to filter</p>
-              </div>
+              <h2 id="where-heading" className="px-1 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Where it went
+              </h2>
               <ul className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
                 {categories.map(({ category: c, cents }) => {
                   const on = category === c;
@@ -339,7 +339,7 @@ export default function MoneyPage() {
                 <button
                   type="button"
                   onClick={() => setShowAllCategories((v) => !v)}
-                  className="px-1 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
+                  className="tap-area px-1 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
                 >
                   {showAllCategories ? "Show fewer" : `Show all ${summary.byCategory.length}`}
                 </button>

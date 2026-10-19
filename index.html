@@ -2,13 +2,26 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover lets the tab bar reach under the iPhone home
+         indicator; the safe-area padding in the CSS keeps content clear of it -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Splitr</title>
     <meta
       name="description"
       content="Split shared expenses fairly with your roommates and friends. Track who paid, who owes, and settle up with ease."
     />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <!-- Saved to an iPhone home screen: opens full screen, with this name and icon -->
+    <!-- use-credentials sends the login cookie: everything here sits behind
+         Cloudflare Access, and manifests are fetched without cookies otherwise -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Splitr" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#FFFFFF" />
   </head>
   <body class="min-h-full flex flex-col bg-canvas text-ink antialiased">
     <!-- display: contents, so the nav and page are flex items of <body> -->

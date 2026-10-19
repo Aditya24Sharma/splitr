@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
@@ -85,12 +86,7 @@ export default function AddExpensePage() {
   return (
     <div className="space-y-9">
       <header>
-        <Link
-          href={editId ? `/transactions/${editId}` : "/"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
-        >
-          ← {editId ? "Back to expense" : "Money"}
-        </Link>
+        <BackLink href={editId ? `/transactions/${editId}` : "/"} label={editId ? "Back to expense" : "Back to Money"} />
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit expense" : "Add expense"}
         </h1>

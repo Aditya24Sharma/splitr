@@ -59,7 +59,7 @@ function ColorPicker({ value, onChange, id }: ColorPickerProps) {
           onClick={() => onChange(c)}
           title={c}
           className={[
-            "w-7 h-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
+            "w-7 h-7 pointer-coarse:w-9 pointer-coarse:h-9 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
             value === c
               ? "border-ink scale-110"
               : "border-transparent hover:scale-105",
@@ -70,9 +70,9 @@ function ColorPicker({ value, onChange, id }: ColorPickerProps) {
         />
       ))}
       {/* Custom colour via native picker */}
-      <div className="relative w-7 h-7" title="Custom color">
+      <div className="relative w-7 h-7 pointer-coarse:w-9 pointer-coarse:h-9" title="Custom color">
         <div
-          className="w-7 h-7 rounded-full border border-dashed border-ink"
+          className="w-full h-full rounded-full border border-dashed border-ink"
           style={{ backgroundColor: PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number]) ? "#FFFFFF" : value }}
         />
         <input

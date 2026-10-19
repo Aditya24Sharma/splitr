@@ -67,6 +67,8 @@ export function PersonChip({
         ? "border-rim bg-surface text-ink"
         : "border-rim bg-surface text-ink-muted hover:border-ink hover:text-ink",
     !readOnly ? "cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun" : "",
+    // Taller on touch screens, where small chips are hard to hit with a finger
+    !readOnly && size === "sm" ? "pointer-coarse:py-2" : "",
   ]
     .filter(Boolean)
     .join(" ");

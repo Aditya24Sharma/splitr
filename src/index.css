@@ -75,7 +75,15 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Height of the phone tab bar, including the iPhone home-indicator strip */
+:root {
+  --tabbar: calc(3.75rem + env(safe-area-inset-bottom));
+}
+
 html {
+  /* No double-tap zoom delay, and no grey flash when tapping */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   font-family: var(--font-sans);
   color: var(--color-ink);
   background-color: var(--color-canvas);
@@ -106,6 +114,18 @@ html {
   to { opacity: 1; transform: none; }
 }
 
+/* Each page eases in when it opens; off for reduced motion */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.page-in {
+  animation: page-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-in { animation: none; }
+}
+
 /* Gentle staggered entrance for lists; off for reduced motion */
 .rise {
   animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -131,4 +151,32 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
+}
+
+/* In landscape on a notched iPhone, keep content clear of the notch */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* A larger, invisible touch area around small links and controls, for
+   fingers; looks no different. Needs room around it, so not for tight rows. */
+.tap-area {
+  position: relative;
+}
+.tap-area::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+/* iPhone and iPad Safari zoom into a text field under 16px when it's tapped.
+   On touch screens, fields are at least 16px; larger ones (the big amount
+   fields) keep their size. Outside a layer, so it wins over text-sm. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
 }

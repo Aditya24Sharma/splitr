@@ -136,13 +136,7 @@ export default function TagsPage() {
   return (
     <div className="space-y-8">
       {/* Page heading */}
-      <div>
-        <h1 className="font-display text-6xl sm:text-7xl uppercase">Tags</h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          Group expenses by store or trip. Renaming a tag updates every expense
-          that uses it.
-        </p>
-      </div>
+      <h1 className="font-display text-6xl sm:text-7xl uppercase">Tags</h1>
 
       {/* ---- Tag list ---- */}
       {loadState === "loading" && (

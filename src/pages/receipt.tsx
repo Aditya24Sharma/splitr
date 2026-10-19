@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { txLabel, type TxView } from "@/lib/transactions";
 import { loadExpenseToEdit, loadSourceTx, peopleQuery, queryClient, useRefreshAll } from "../queries";
+import { BackLink } from "@/components/BackLink";
 import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
@@ -379,12 +380,7 @@ export default function NewItemizedPage() {
   return (
     <div className="space-y-9">
       <header>
-        <Link
-          href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
-        >
-          ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
-        </Link>
+        <BackLink href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"} label={editId ? "Back to expense" : fromTx ? "Back to split options" : "Back to New"} />
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit receipt" : "Receipt"}
         </h1>

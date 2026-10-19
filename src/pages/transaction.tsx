@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountsQuery, expenseQuery, isNotFound, peopleQuery, transactionQuery, useRefreshAll } from "../queries";
+import { Chevron } from "@/components/Chevron";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
+import { BackLink } from "@/components/BackLink";
 import { BankLogo } from "@/components/BankLogo";
+import { DeleteSection } from "@/components/DeleteSection";
 import { PersonChip } from "@/components/PersonChip";
 import { CategoryChips } from "@/components/CategoryChips";
 import { formatUSD } from "@/lib/money";
@@ -62,7 +65,6 @@ export default function TransactionPage() {
         : "loading";
 
   const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -100,7 +102,6 @@ export default function TransactionPage() {
       refreshAll();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
-      setDeleteConfirm(false);
       setDeleting(false);
     }
   }
@@ -135,9 +136,7 @@ export default function TransactionPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink">
-        ← Money
-      </Link>
+      <BackLink href="/" label="Back to Money" />
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header>
@@ -169,31 +168,7 @@ export default function TransactionPage() {
           <Link href={`/transactions/new?edit=${tx.id}`}>
             <Button variant="primary" size="sm">Edit</Button>
           </Link>
-          <div className="ml-auto">
-            {!deleteConfirm ? (
-              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(true)}>
-                Delete
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-ink-muted">
-                  {tx.split ? "Delete? The split stays." : "Delete for good?"}
-                </span>
-                <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? "Deleting…" : "Delete"}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
         </div>
-      )}
-      {deleteError && (
-        <p className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-3" role="alert">
-          {deleteError}
-        </p>
       )}
 
       {/* ── Split ───────────────────────────────────────────────────────── */}
@@ -217,9 +192,9 @@ export default function TransactionPage() {
               </div>
               <span
                 aria-hidden="true"
-                className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center text-xl transition-transform group-hover:translate-x-1"
+                className="shrink-0 w-11 h-11 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
               >
-                →
+                <Chevron direction="right" />
               </span>
             </div>
             {split && (
@@ -273,9 +248,9 @@ export default function TransactionPage() {
                 </div>
                 <span
                   aria-hidden="true"
-                  className="shrink-0 w-10 h-10 rounded-full bg-ink text-white inline-flex items-center justify-center text-lg transition-transform group-hover:translate-x-1"
+                  className="shrink-0 w-10 h-10 rounded-full bg-ink text-white inline-flex items-center justify-center transition-transform group-hover:translate-x-1"
                 >
-                  →
+                  <Chevron direction="right" />
                 </span>
               </Link>
             ))}
@@ -302,6 +277,17 @@ export default function TransactionPage() {
           </p>
         )}
       </Section>
+
+      {/* Bank charges come from the bank, so only hand-added ones can go */}
+      {tx.source === "MANUAL" && (
+        <DeleteSection
+          label="Delete expense"
+          question={tx.split ? "Delete? The split stays." : "Delete for good?"}
+          deleting={deleting}
+          error={deleteError}
+          onDelete={handleDelete}
+        />
+      )}
     </div>
   );
 }

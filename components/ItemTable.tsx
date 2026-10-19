@@ -132,8 +132,9 @@ export function ItemTable({
               </button>
             </div>
 
-            {/* Qty × Unit = Line total */}
-            <div className="flex flex-wrap items-center gap-1.5 ml-7 text-sm text-ink-faint">
+            {/* Qty × Unit = Line total; indented under the name from tablet up,
+                full width on phones so it fits on one line */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:ml-7 text-sm text-ink-faint">
               <input
                 type="number"
                 value={row.quantity}
@@ -143,7 +144,7 @@ export function ItemTable({
                 min="0"
                 step="1"
                 aria-label={`Row ${idx + 1} quantity`}
-                className={`w-14 px-2 text-center ${cellInput}`}
+                className={`w-12 sm:w-14 px-2 text-center ${cellInput}`}
               />
               <span aria-hidden="true">×</span>
               <div className="relative">
@@ -190,7 +191,7 @@ export function ItemTable({
             {/* Per-row assignee toggles */}
             {people.length > 0 && (
               <div
-                className="flex flex-wrap gap-1.5 ml-7"
+                className="flex flex-wrap gap-1.5 sm:ml-7"
                 role="group"
                 aria-label={`Row ${idx + 1} assigned to`}
               >
