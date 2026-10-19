@@ -355,9 +355,6 @@ export default function SplitsPage() {
       {loadState === "ready" && expenses.length === 0 && (
         <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
           <p className="font-display text-4xl uppercase">Nothing to split yet</p>
-          <p className="mt-3 text-sm text-ink-muted">
-            Tap Split on a charge in Money, or start one from scratch.
-          </p>
           <Link href="/expenses/new" className="inline-block mt-6">
             <Button variant="primary">+ New split</Button>
           </Link>

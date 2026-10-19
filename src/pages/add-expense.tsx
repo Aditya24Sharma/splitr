@@ -89,10 +89,6 @@ export default function AddExpensePage() {
         <h1 className="mt-4 font-display text-6xl sm:text-7xl uppercase">
           {editId ? "Edit expense" : "Add expense"}
         </h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          For cash and anything your linked banks don’t see. Card charges show up on their own
-          after a sync.
-        </p>
       </header>
 
       {/* ── Amount ──────────────────────────────────────────────────────── */}

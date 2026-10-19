@@ -218,7 +218,7 @@ export default function TransactionPage() {
       )}
 
       {canSplit && (
-        <Section title="Split it" hint="Paid for friends? Split it and your share comes off what you spent.">
+        <Section title="Split it">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               {
@@ -257,16 +257,12 @@ export default function TransactionPage() {
 
       {moving && (
         <p className="text-sm text-ink-muted rounded-3xl bg-mist px-5 py-4">
-          Money moving between your own accounts, like a transfer or a card payment. It doesn’t count
-          as spending, so the same purchase isn’t counted twice.
+          Transfer between your accounts · not counted as spending
         </p>
       )}
 
       {/* ── Category ────────────────────────────────────────────────────── */}
-      <Section
-        title="Category"
-        hint={tx.source === "PLAID" ? "From your bank. Pick another if it’s wrong." : undefined}
-      >
+      <Section title="Category">
         <CategoryChips options={ALL_CATEGORIES} value={tx.categoryPrimary} onChange={handleCategory} />
       </Section>
 

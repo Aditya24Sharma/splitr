@@ -52,9 +52,6 @@ export default function NewExpensePage() {
         <h1 className={`${tx ? "mt-4 " : ""}font-display text-6xl sm:text-7xl uppercase`}>
           {tx ? "Split it" : "New"}
         </h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          {tx ? "How do you want to split it?" : "What are you adding?"}
-        </p>
       </header>
 
       {tx && (

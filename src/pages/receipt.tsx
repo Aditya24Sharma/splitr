@@ -360,9 +360,6 @@ export default function NewItemizedPage() {
     return (
       <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
         <p className="font-display text-4xl uppercase">Add people first</p>
-        <p className="mt-3 text-sm text-ink-muted">
-          You need at least one person to split a receipt with.
-        </p>
         <Link href="/people" className="inline-block mt-6">
           <Button variant="primary">Add people</Button>
         </Link>
@@ -388,8 +385,8 @@ export default function NewItemizedPage() {
         )}
         {sourceTx && (
           <p className="mt-3 text-sm text-ink-muted">
-            For your <span className="font-semibold text-ink tabular-nums">{formatUSD(sourceTx.amount)}</span>{" "}
-            charge. Your share comes off what you spent in Money.
+            From your <span className="font-semibold text-ink tabular-nums">{formatUSD(sourceTx.amount)}</span>{" "}
+            charge
           </p>
         )}
       </header>
@@ -467,7 +464,7 @@ export default function NewItemizedPage() {
         payerId={payerId}
       />
 
-      <Section title="Tags" hint="Optional. Manage the list on the Tags page.">
+      <Section title="Tags">
         <TagPicker value={tags} onChange={setTags} />
       </Section>
 
