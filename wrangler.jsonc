@@ -1,19 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "splitr",
-  "main": ".open-next/worker.js",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-09-01",
+  // nodejs_compat fills process.env from the Worker's secrets
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    // The React app is static files; any other path is a page route
+    "not_found_handling": "single-page-application",
+    // Only API calls run the Worker. Pages and assets are served without it,
+    // so they cost no Worker time or requests.
+    "run_worker_first": ["/api/*"]
   },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "splitr"
-    }
-  ],
   // The app is only reachable at its own domain, where Cloudflare Access asks
   // for a login. The default *.workers.dev and preview addresses would skip
   // that login, so they stay off.
@@ -30,7 +28,7 @@
       "binding": "DB",
       "database_name": "splitr",
       "database_id": "8dca0d2b-ce1b-4a48-99b8-c037737cd0d9",
-      "migrations_dir": "prisma/migrations"
+      "migrations_dir": "migrations"
     }
   ],
   "observability": {

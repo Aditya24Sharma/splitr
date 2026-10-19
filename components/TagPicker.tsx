@@ -1,12 +1,10 @@
-"use client";
-
 /**
  * TagPicker — the tag list as toggle chips; click to add or remove a tag.
  * Tags are created on the Tags page, so this only picks from that list.
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 
 interface TagPickerProps {
   value: string[];

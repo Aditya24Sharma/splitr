@@ -1,5 +1,3 @@
-"use client";
-
 import { categoryColor, categoryLabel } from "@/lib/spending";
 
 /** Single-choice category picker: pills with a color dot. */

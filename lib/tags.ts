@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client'
-
 /** Lowercase, trim, and collapse inner spaces so "Trip  to X " and "trip to x" match. */
 export function normalizeTag(raw: string): string {
   return raw.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -14,23 +12,8 @@ export function parseTags(value: unknown): string[] | null {
   return [...new Set(value.map(normalizeTag).filter(t => t !== ''))]
 }
 
-/** Prisma input that links an expense to these (existing) tags. */
-export function connectTags(names: string[]) {
-  return names.map(name => ({ name }))
-}
-
 /** Names that aren't in the tag list. Tags are created on the Tags page, not on expenses. */
-export async function unknownTags(
-  db: Pick<PrismaClient, 'tag'>,
-  names: string[],
-): Promise<string[]> {
-  if (names.length === 0) return []
-  const found = new Set((await db.tag.findMany({ where: { name: { in: names } } })).map(t => t.name))
+export function unknownTags(names: string[], existing: string[]): string[] {
+  const found = new Set(existing)
   return names.filter(n => !found.has(n))
-}
-
-/** Ids of these (existing) tags, for writing an expense's tag links directly. */
-export async function tagIds(db: Pick<PrismaClient, 'tag'>, names: string[]): Promise<string[]> {
-  if (names.length === 0) return []
-  return (await db.tag.findMany({ where: { name: { in: names } }, select: { id: true } })).map(t => t.id)
 }

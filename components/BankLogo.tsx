@@ -26,8 +26,7 @@ export function BankLogo({ item, size = "md" }: { item?: BankItem | null; size?:
   if (item.institutionLogo) {
     return (
       <span className={`${base} bg-white`}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- inline base64 from Plaid */}
-        <img src={`data:image/png;base64,${item.institutionLogo}`} alt={name} className="w-full h-full object-contain p-1" />
+                <img src={`data:image/png;base64,${item.institutionLogo}`} alt={name} className="w-full h-full object-contain p-1" />
       </span>
     );
   }

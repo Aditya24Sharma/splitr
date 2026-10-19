@@ -1,12 +1,10 @@
-"use client";
-
 /**
  * SelectionBar — sticks to the bottom of the screen while expenses are ticked.
  * One row of actions; "Settle up" and "Tag" open a panel above that row.
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { formatUSD } from "@/lib/money";
 import type { Debt } from "@/lib/settle";

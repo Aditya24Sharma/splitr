@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/Button";
 

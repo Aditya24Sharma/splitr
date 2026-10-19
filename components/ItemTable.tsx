@@ -1,5 +1,3 @@
-"use client";
-
 import { PersonChip } from "@/components/PersonChip";
 import { Button } from "@/components/ui/Button";
 import { formatUSD, toCents } from "@/lib/money";

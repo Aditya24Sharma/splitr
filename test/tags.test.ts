@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeTag, parseTags, unknownTags } from '@/lib/tags'
-import type { PrismaClient } from '@prisma/client'
 
 describe('normalizeTag', () => {
   it('trims, lowercases, and collapses spaces', () => {
@@ -25,20 +24,15 @@ describe('parseTags', () => {
 })
 
 describe('unknownTags', () => {
-  // Stands in for the database: only "walmart" and "costco" exist
-  const db = {
-    tag: {
-      findMany: async ({ where }: { where: { name: { in: string[] } } }) =>
-        ['walmart', 'costco'].filter(n => where.name.in.includes(n)).map(name => ({ name })),
-    },
-  } as unknown as Pick<PrismaClient, 'tag'>
+  // Only "walmart" and "costco" exist
+  const existing = ['walmart', 'costco']
 
-  it('returns names missing from the tag list', async () => {
-    expect(await unknownTags(db, ['walmart', 'trip to x'])).toEqual(['trip to x'])
+  it('returns names missing from the tag list', () => {
+    expect(unknownTags(['walmart', 'trip to x'], existing)).toEqual(['trip to x'])
   })
 
-  it('returns nothing when every tag exists, or none are given', async () => {
-    expect(await unknownTags(db, ['costco', 'walmart'])).toEqual([])
-    expect(await unknownTags(db, [])).toEqual([])
+  it('returns nothing when every tag exists, or none are given', () => {
+    expect(unknownTags(['costco', 'walmart'], existing)).toEqual([])
+    expect(unknownTags([], existing)).toEqual([])
   })
 })

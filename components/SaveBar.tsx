@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 
 /** Save / Cancel pinned to the bottom of long forms, with a one-line summary. */
