@@ -22,8 +22,6 @@ import { accountsQuery, transactionsQuery, useRefreshAll } from "../queries";
 import {
   accountLabel,
   indexAccounts,
-  lastSynced,
-  timeAgo,
   type AccountRef,
   type AccountsResponse,
 } from "@/lib/bank-types";
@@ -145,7 +143,6 @@ export default function MoneyPage() {
     [txs, month]
   );
   const net = useMemo(() => netBalance(banks.items.flatMap((i) => i.accounts)), [banks.items]);
-  const synced = useMemo(() => lastSynced(banks.items), [banks.items]);
   const thisMonth = todayLocal().slice(0, 7);
   const oldestMonth = txs.at(-1)?.date.slice(0, 7) ?? thisMonth;
 
@@ -188,9 +185,6 @@ export default function MoneyPage() {
             {hasBanks && (
               <SyncButton onSynced={refreshAll} />
             )}
-            {synced && (
-              <span className="text-sm text-ink-muted">Banks updated {timeAgo(synced)}</span>
-            )}
           </div>
         )}
       </header>
@@ -213,10 +207,6 @@ export default function MoneyPage() {
       {loadState === "ready" && txs.length === 0 && (
         <div className="rounded-3xl border border-ink bg-sky px-6 py-12 text-center">
           <p className="font-display text-4xl uppercase">Track your money</p>
-          <p className="mt-3 text-sm text-ink-muted max-w-[42ch] mx-auto">
-            Link a bank to pull in your spending automatically, or add an expense by hand. Any
-            charge can be split with friends in one tap.
-          </p>
           <div className="mt-6 flex justify-center gap-2 flex-wrap">
             <Link href="/accounts">
               <Button variant="primary">Link a bank</Button>
@@ -255,23 +245,21 @@ export default function MoneyPage() {
                 </button>
               </div>
 
-              <p className="mt-4 text-sm font-semibold">Spent</p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.08em]">Spent</p>
               <p className="font-display text-7xl sm:text-8xl tabular-nums leading-none">
                 {formatUSD(summary.spentCents)}
               </p>
-              {summary.owedBackCents > 0 ? (
-                <p className="mt-3 text-sm">
-                  <span className="font-semibold tabular-nums">{formatUSD(summary.owedBackCents)}</span>{" "}
-                  coming back from splits · your share{" "}
-                  <span className="font-semibold tabular-nums">{formatUSD(summary.yourShareCents)}</span>
-                </p>
-              ) : (
-                summary.spentCents > 0 && (
-                  <p className="mt-3 text-sm text-ink-muted">
-                    Paid for friends? Tap <span className="font-semibold text-ink">Split</span> on a
-                    charge and it comes off what you spent.
-                  </p>
-                )
+              {summary.owedBackCents > 0 && (
+                <dl className="mt-4 flex gap-8">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.08em]">Owed to you</dt>
+                    <dd className="mt-1 font-display text-3xl tabular-nums">{formatUSD(summary.owedBackCents)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.08em]">Your share</dt>
+                    <dd className="mt-1 font-display text-3xl tabular-nums">{formatUSD(summary.yourShareCents)}</dd>
+                  </div>
+                </dl>
               )}
             </div>
 
@@ -420,7 +408,7 @@ export default function MoneyPage() {
                 <p className="font-display text-3xl uppercase">
                   {q || category || show !== "all" ? "No matches" : `Nothing in ${monthName(month, false)}`}
                 </p>
-                {q || category || show !== "all" ? (
+                {(q || category || show !== "all") && (
                   <button
                     type="button"
                     onClick={() => {
@@ -432,10 +420,6 @@ export default function MoneyPage() {
                   >
                     Clear search and filters
                   </button>
-                ) : (
-                  <p className="mt-3 text-sm text-ink-muted">
-                    {hasBanks ? "Sync to pull in new charges, or add one by hand." : "Add an expense to get going."}
-                  </p>
                 )}
               </div>
             ) : (
