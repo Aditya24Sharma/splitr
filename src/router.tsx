@@ -1,4 +1,4 @@
-import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
 import AppNav, { BottomTabs } from "@/components/AppNav";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
@@ -15,12 +15,16 @@ import NewItemizedPage from "./pages/receipt";
 import ExpenseDetailPage from "./pages/expense";
 
 function Layout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <>
       <AppNav />
       {/* Bottom space clears the phone tab bar and the iPhone home indicator */}
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-10 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6">
-        <Outlet />
+        {/* Keyed by path, so each page eases in when you open it */}
+        <div key={pathname} className="page-in">
+          <Outlet />
+        </div>
       </main>
       <BottomTabs />
     </>

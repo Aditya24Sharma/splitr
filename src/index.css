@@ -114,6 +114,18 @@ html {
   to { opacity: 1; transform: none; }
 }
 
+/* Each page eases in when it opens; off for reduced motion */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.page-in {
+  animation: page-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-in { animation: none; }
+}
+
 /* Gentle staggered entrance for lists; off for reduced motion */
 .rise {
   animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
