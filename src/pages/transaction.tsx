@@ -257,7 +257,7 @@ export default function TransactionPage() {
 
       {moving && (
         <p className="text-sm text-ink-muted rounded-3xl bg-mist px-5 py-4">
-          Transfer between your accounts · not counted as spending
+          Transfer · not counted as spending
         </p>
       )}
 
