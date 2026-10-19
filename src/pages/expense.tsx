@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { expenseQuery, isNotFound, peopleQuery, useRefreshAll } from "../queries";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/CopyButton";
@@ -73,67 +75,45 @@ function formatDate(day: string): string {
 // Page
 // ---------------------------------------------------------------------------
 
+const NO_PEOPLE: Person[] = [];
+const NO_TAGS: string[] = [];
+
 export default function ExpenseDetailPage() {
   const id = useRouteParam("id");
   const goTo = useGoTo();
 
-  const [expense, setExpense] = useState<Expense | null>(null);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "error" | "notfound" | "ready">(
-    "loading"
-  );
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const client = useQueryClient();
+  const refreshAll = useRefreshAll();
+  const expenseKey = expenseQuery<Expense>(id).queryKey;
+  const expenseResult = useQuery(expenseQuery<Expense>(id));
+  // People only fill in names; if they fail, the split still shows
+  const peopleResult = useQuery(peopleQuery);
+  const expense = expenseResult.data ?? null;
+  const people = peopleResult.data ?? NO_PEOPLE;
+  const loadError = expenseResult.error;
+  const loadState = isNotFound(loadError)
+    ? "notfound"
+    : loadError
+      ? "error"
+      : expense && !peopleResult.isLoading
+        ? "ready"
+        : "loading";
 
-  // Optimistic logged state
-  const [logged, setLogged] = useState(false);
+  // Logged and tags save as soon as they change, shown before the save lands
+  const logged = expense?.loggedToSplitwise ?? false;
   const [logPending, setLogPending] = useState(false);
-
-  // Tags (saved as soon as they change)
-  const [tags, setTags] = useState<string[]>([]);
+  const tags = expense?.tags ?? NO_TAGS;
   const [tagsError, setTagsError] = useState<string | null>(null);
+
+  /** Writes a change into the cached split, for showing it before the save lands. */
+  function patchCached(change: Partial<Expense>) {
+    client.setQueryData<Expense>(expenseKey, (e) => (e ? { ...e, ...change } : e));
+  }
 
   // Delete state
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Load
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    setLoadState("loading");
-    setLoadError(null);
-
-    Promise.all([
-      fetch(`/api/expenses/${id}`).then(async (r) => {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error(`Failed to load expense (HTTP ${r.status})`);
-        return r.json() as Promise<Expense>;
-      }),
-      fetch("/api/people").then((r) => {
-        if (!r.ok) return [] as Person[];
-        return r.json() as Promise<Person[]>;
-      }),
-    ])
-      .then(([exp, ppl]) => {
-        if (!exp) {
-          setLoadState("notfound");
-          return;
-        }
-        setExpense(exp);
-        setLogged(exp.loggedToSplitwise);
-        setTags(exp.tags);
-        setPeople(ppl);
-        setLoadState("ready");
-      })
-      .catch((err) => {
-        setLoadError(
-          err instanceof Error ? err.message : "An unexpected error occurred."
-        );
-        setLoadState("error");
-      });
-  }, [id]);
 
   const personById = useMemo(
     () => new Map(people.map((p) => [p.id, p])),
@@ -147,7 +127,7 @@ export default function ExpenseDetailPage() {
   async function handleToggleLogged() {
     if (!expense || logPending) return;
     const newVal = !logged;
-    setLogged(newVal); // optimistic
+    patchCached({ loggedToSplitwise: newVal }); // optimistic
     setLogPending(true);
     try {
       const res = await fetch(`/api/expenses/${id}`, {
@@ -156,10 +136,12 @@ export default function ExpenseDetailPage() {
         body: JSON.stringify({ loggedToSplitwise: newVal }),
       });
       if (!res.ok) {
-        setLogged(!newVal); // revert
+        patchCached({ loggedToSplitwise: !newVal }); // revert
+      } else {
+        refreshAll(); // the Splits list and the charge show it too
       }
     } catch {
-      setLogged(!newVal); // revert
+      patchCached({ loggedToSplitwise: !newVal }); // revert
     } finally {
       setLogPending(false);
     }
@@ -171,7 +153,7 @@ export default function ExpenseDetailPage() {
 
   async function handleTagsChange(next: string[]) {
     const prev = tags;
-    setTags(next); // optimistic
+    patchCached({ tags: next }); // optimistic
     setTagsError(null);
     try {
       const res = await fetch(`/api/expenses/${id}`, {
@@ -181,9 +163,10 @@ export default function ExpenseDetailPage() {
       });
       if (!res.ok) throw new Error();
       const saved = (await res.json()) as { tags: string[] };
-      setTags(saved.tags);
+      patchCached({ tags: saved.tags });
+      refreshAll();
     } catch {
-      setTags(prev); // revert
+      patchCached({ tags: prev }); // revert
       setTagsError("Couldn't save tags — please try again");
     }
   }
@@ -205,6 +188,7 @@ export default function ExpenseDetailPage() {
         );
       }
       goTo(expense.transaction ? `/transactions/${expense.transaction.id}` : "/splits");
+      refreshAll();
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : "Delete failed — please try again"
@@ -264,7 +248,7 @@ export default function ExpenseDetailPage() {
           className="text-sm text-danger bg-danger-dim border border-danger rounded-3xl px-5 py-4"
           role="alert"
         >
-          {loadError ?? "Something went wrong."}
+          {loadError?.message ?? "Something went wrong."}
         </p>
         <Link href="/splits">
           <Button variant="secondary">Back to splits</Button>

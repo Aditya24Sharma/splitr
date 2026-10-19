@@ -22,7 +22,7 @@ export function apportion(total: Cents, weights: number[]): Cents[] {
   const effSum = useEqual ? weights.length : sum
   const raw = effWeights.map(w => (total * w) / effSum)
   const floors = raw.map(Math.floor)
-  let remainder = total - floors.reduce((a, b) => a + b, 0)
+  const remainder = total - floors.reduce((a, b) => a + b, 0)
   // distribute leftover cents to largest fractional remainders, tie-break by lower index
   const order = raw
     .map((r, i) => ({ i, frac: r - Math.floor(r) }))

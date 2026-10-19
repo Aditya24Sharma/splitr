@@ -33,7 +33,7 @@ export function useGoTo(): (href: string) => void {
 }
 
 /** The page's query string as plain strings, e.g. { edit: "abc" } for ?edit=abc. */
-export function useQuery<T extends Record<string, string | undefined>>(): T {
+export function useQueryString<T extends Record<string, string | undefined>>(): T {
   return useSearch({ strict: false }) as T;
 }
 
