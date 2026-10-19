@@ -46,8 +46,6 @@ export function PersonChip({
   size = "md",
   readOnly = false,
 }: PersonChipProps) {
-  const initials = getInitials(name);
-
   const avatarClasses =
     size === "sm"
       ? "w-5 h-5 rounded-full text-[9px]"
@@ -73,15 +71,7 @@ export function PersonChip({
     .filter(Boolean)
     .join(" ");
 
-  const avatar = (
-    <span
-      className={`${avatarClasses} flex items-center justify-center font-semibold flex-shrink-0 leading-none`}
-      style={{ backgroundColor: colorHex, color: readableText(colorHex) }}
-      aria-hidden="true"
-    >
-      {initials}
-    </span>
-  );
+  const avatar = <PersonAvatar name={name} colorHex={colorHex} className={avatarClasses} />;
 
   const label = <span className="leading-none">{name}</span>;
 
@@ -105,5 +95,26 @@ export function PersonChip({
       {avatar}
       {label}
     </button>
+  );
+}
+
+/** The round initials badge on its own, for rows that show the name as text */
+export function PersonAvatar({
+  name,
+  colorHex,
+  className = "w-7 h-7 rounded-full text-[11px]",
+}: {
+  name: string;
+  colorHex: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`${className} flex items-center justify-center font-semibold flex-shrink-0 leading-none`}
+      style={{ backgroundColor: colorHex, color: readableText(colorHex) }}
+      aria-hidden="true"
+    >
+      {getInitials(name)}
+    </span>
   );
 }

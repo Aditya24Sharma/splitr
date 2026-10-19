@@ -1,9 +1,10 @@
 import { useState, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { peopleQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
-import { PersonChip } from "@/components/PersonChip";
+import { PersonAvatar } from "@/components/PersonChip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,7 +110,6 @@ export default function PeoplePage() {
   const [addColor, setAddColor] = useState(() => pickRandomColor());
   const [addDefault, setAddDefault] = useState(false);
   const [addPending, setAddPending] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
   const [addNameTouched, setAddNameTouched] = useState(false);
 
   // ---- Inline edit ----
@@ -119,13 +119,11 @@ export default function PeoplePage() {
   const [editDefault, setEditDefault] = useState(false);
   const [editMe, setEditMe] = useState(false);
   const [editPending, setEditPending] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
   const [editNameTouched, setEditNameTouched] = useState(false);
 
   // ---- Archive confirmation ----
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archivePending, setArchivePending] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Add
@@ -138,7 +136,6 @@ export default function PeoplePage() {
       return;
     }
     setAddPending(true);
-    setAddError(null);
     try {
       const res = await fetch("/api/people", {
         method: "POST",
@@ -161,9 +158,7 @@ export default function PeoplePage() {
       setAddNameTouched(false);
       await refreshAll();
     } catch (err) {
-      setAddError(
-        err instanceof Error ? err.message : "Failed to add person."
-      );
+      toast.error(err instanceof Error ? err.message : "Couldn’t add the person.");
     } finally {
       setAddPending(false);
     }
@@ -179,14 +174,12 @@ export default function PeoplePage() {
     setEditColor(person.colorHex);
     setEditDefault(person.isDefault);
     setEditMe(person.isMe);
-    setEditError(null);
     setEditNameTouched(false);
     setArchiveId(null);
   }
 
   function cancelEdit() {
     setEditId(null);
-    setEditError(null);
     setEditNameTouched(false);
   }
 
@@ -197,7 +190,6 @@ export default function PeoplePage() {
       return;
     }
     setEditPending(true);
-    setEditError(null);
     try {
       const res = await fetch(`/api/people/${editId}`, {
         method: "PATCH",
@@ -218,9 +210,7 @@ export default function PeoplePage() {
       setEditId(null);
       await refreshAll();
     } catch (err) {
-      setEditError(
-        err instanceof Error ? err.message : "Failed to save changes."
-      );
+      toast.error(err instanceof Error ? err.message : "Couldn’t save the changes.");
     } finally {
       setEditPending(false);
     }
@@ -232,18 +222,16 @@ export default function PeoplePage() {
 
   async function handleArchive(id: string) {
     setArchivePending(true);
-    setArchiveError(null);
     try {
       const res = await fetch(`/api/people/${id}`, { method: "DELETE" });
       if (!res.ok) {
         throw new Error(`Error ${res.status}`);
       }
       setArchiveId(null);
-      setArchiveError(null);
       await refreshAll();
     } catch {
       // Keep archiveId open so the user can retry
-      setArchiveError("Couldn't archive — try again.");
+      toast.error("Couldn’t archive. Try again.");
     } finally {
       setArchivePending(false);
     }
@@ -258,16 +246,6 @@ export default function PeoplePage() {
       {/* Page heading */}
       <div>
         <h1 className="font-display text-6xl sm:text-7xl uppercase">People</h1>
-        <p className="mt-3 text-sm text-ink-muted">
-          Who you split with. Roommates are ticked automatically on new expenses.
-        </p>
-        {loadState === "ready" && people.length > 0 && !people.some((p) => p.isMe) && (
-          <p className="mt-3 text-sm rounded-2xl border border-ink bg-sun/40 px-4 py-2.5">
-            Tap <span className="font-semibold">Edit</span> on yourself and tick{" "}
-            <span className="font-semibold">This is me</span>, so splits from your bank charges
-            start with you as the payer.
-          </p>
-        )}
       </div>
 
       {/* ---- People list ---- */}
@@ -304,15 +282,7 @@ export default function PeoplePage() {
                     <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                       {/* Name */}
                       <div className="flex-1 min-w-0">
-                        <Field
-                          label="Name"
-                          htmlFor={`edit-name-${person.id}`}
-                          error={
-                            editNameTouched && !editName.trim()
-                              ? undefined
-                              : editError ?? undefined
-                          }
-                        >
+                        <Field label="Name" htmlFor={`edit-name-${person.id}`}>
                           <Input
                             id={`edit-name-${person.id}`}
                             value={editName}
@@ -387,76 +357,64 @@ export default function PeoplePage() {
               ) : (
                 /* ---- Person row ---- */
                 <div key={person.id} className="px-5 py-3.5 bg-surface">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <PersonChip
-                      name={person.name}
-                      colorHex={person.colorHex}
-                      readOnly
-                    />
-
-
-                    {person.isMe && (
-                      <span className="text-xs font-semibold bg-sun border border-ink rounded-full px-2.5 py-0.5 shrink-0">
-                        You
-                      </span>
-                    )}
-                    {person.isDefault && (
-                      <span className="text-xs font-semibold bg-mint-dim border border-mint rounded-full px-2.5 py-0.5 shrink-0">
-                        Roommate
-                      </span>
-                    )}
-
-                    <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                      {archiveId === person.id ? (
-                        <>
-                          <span className="text-xs text-ink-muted hidden sm:block mr-1">
-                            Archive this person?
-                          </span>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => handleArchive(person.id)}
-                            disabled={archivePending}
-                          >
-                            {archivePending ? "Archiving…" : "Confirm"}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => { setArchiveId(null); setArchiveError(null); }}
-                            disabled={archivePending}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => startEdit(person)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setArchiveId(person.id);
-                              setEditId(null);
-                            }}
-                            className="hover:!text-danger hover:!bg-danger-dim"
-                          >
-                            Archive
-                          </Button>
-                        </>
+                  {/* One line at any width: a long name shortens, the buttons never wrap */}
+                  <div className="flex items-center gap-3">
+                    <PersonAvatar name={person.name} colorHex={person.colorHex} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{person.name}</p>
+                      {(person.isMe || person.isDefault) && (
+                        <p className="text-xs text-ink-muted">
+                          {[person.isMe && "You", person.isDefault && "Roommate"].filter(Boolean).join(" · ")}
+                        </p>
                       )}
                     </div>
+
+                    <div className="shrink-0 flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => startEdit(person)}
+                        disabled={archiveId === person.id}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setArchiveId(person.id);
+                          setEditId(null);
+                        }}
+                        disabled={archiveId === person.id}
+                        className="hover:!text-danger hover:!bg-danger-dim"
+                      >
+                        Archive
+                      </Button>
+                    </div>
                   </div>
-                  {archiveId === person.id && archiveError && (
-                    <p className="mt-2 text-xs text-danger" role="alert">
-                      {archiveError}
-                    </p>
+
+                  {archiveId === person.id && (
+                    <div className="mt-3 flex items-center gap-2 flex-wrap">
+                      <span className="mr-auto text-sm text-ink-muted">Archive this person?</span>
+                      <span className="flex items-center gap-2">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleArchive(person.id)}
+                          disabled={archivePending}
+                        >
+                          {archivePending ? "Archiving…" : "Archive"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setArchiveId(null)}
+                          disabled={archivePending}
+                        >
+                          Cancel
+                        </Button>
+                      </span>
+                    </div>
                   )}
                 </div>
               )
@@ -512,12 +470,6 @@ export default function PeoplePage() {
             />
             Roommate (ticked by default on new expenses)
           </label>
-
-          {addError && (
-            <p className="mt-2 text-xs text-danger" role="alert">
-              {addError}
-            </p>
-          )}
 
           <div className="mt-4">
             <Button
