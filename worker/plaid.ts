@@ -106,12 +106,13 @@ function listEnv(name: string, fallback: string): string[] {
 }
 
 export const plaid = {
-  linkTokenCreate: (redirectUri?: string) =>
+  /** With an access token, Link opens in update mode to sign back in to that bank. */
+  linkTokenCreate: (redirectUri?: string, accessToken?: string) =>
     call<{ link_token: string }>('/link/token/create', {
       client_name: 'Splitr',
       language: 'en',
       user: { client_user_id: PLAID_USER_ID },
-      products: listEnv('PLAID_PRODUCTS', 'transactions'),
+      ...(accessToken ? { access_token: accessToken } : { products: listEnv('PLAID_PRODUCTS', 'transactions') }),
       country_codes: listEnv('PLAID_COUNTRY_CODES', 'US'),
       ...(redirectUri && { redirect_uri: redirectUri }),
     }),

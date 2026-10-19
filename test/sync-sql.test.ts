@@ -1,12 +1,14 @@
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPlatformProxy } from 'wrangler'
+import { getDb } from '../worker/db'
 import type { PlaidAccount, PlaidTransaction } from '../worker/plaid'
 import {
   deleteTransactions,
   moveSplitsToPosted,
+  syncAllItems,
   upsertAccounts,
   upsertSnapshots,
   upsertTransactions,
@@ -159,5 +161,44 @@ describe('sync SQL', () => {
     const bad = db.prepare(`INSERT INTO "Transaction" ("source") VALUES ('PLAID')`) // misses NOT NULL columns
     await expect(db.batch([upsertTransactions(db, [tx('t1')], 'now'), bad])).rejects.toThrow()
     expect(await rows(`SELECT * FROM "Transaction"`)).toEqual([])
+  })
+})
+
+describe('syncAllItems', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('syncs the other banks when one needs a login, and says which', async () => {
+    vi.stubEnv('PLAID_CLIENT_ID', 'id')
+    vi.stubEnv('PLAID_SECRET', 'secret')
+    vi.stubEnv('PLAID_ENV', 'sandbox')
+    await db.prepare(`INSERT INTO "PlaidItem" ("id", "itemId", "accessToken", "institutionName") VALUES (2, 'item-2', 'broken', 'Chase')`).run()
+
+    // A fake Plaid; anything else (the local D1) goes to the real fetch
+    const realFetch = globalThis.fetch
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input)
+      if (!url.includes('plaid.com')) return realFetch(input, init)
+      const body = JSON.parse(String(init?.body))
+      if (body.access_token === 'broken') {
+        return Response.json({ error_code: 'ITEM_LOGIN_REQUIRED', error_message: 'login required' }, { status: 400 })
+      }
+      if (url.endsWith('/accounts/get')) return Response.json({ accounts: [acct('acc-1', 250)] })
+      return Response.json({ added: [tx('t1')], modified: [], removed: [], next_cursor: 'c1', has_more: false })
+    })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const results = await syncAllItems(getDb(db))
+
+    expect(results).toEqual([
+      { itemId: 1, institutionName: null, added: 1, modified: 0, removed: 0 },
+      { itemId: 2, institutionName: 'Chase', added: 0, modified: 0, removed: 0, error: 'login_required' },
+    ])
+    expect(await rows(`SELECT "plaidTransactionId" FROM "Transaction"`)).toEqual([{ plaidTransactionId: 't1' }])
+    expect(logged.mock.calls[0][0]).toBe(
+      '[plaid] sync Chase (item 2) failed: ITEM_LOGIN_REQUIRED: Plaid /accounts/get failed: login required',
+    )
   })
 })

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { accountsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { BankLogo } from "@/components/BankLogo";
-import { SyncButton } from "@/components/SyncButton";
+import { SyncButton, type SyncResult } from "@/components/SyncButton";
 import { PlaidLinkButton } from "@/components/PlaidLinkButton";
 import { formatUSD } from "@/lib/money";
 import { netBalance } from "@/lib/spending";
@@ -13,6 +13,31 @@ export default function BanksPage() {
   const { data, error: loadError } = useQuery(accountsQuery);
   const refreshAll = useRefreshAll();
   const [notice, setNotice] = useState<string | null>(null);
+  // Banks whose last sync said to sign in again. Kept until they sync cleanly.
+  const [needsLogin, setNeedsLogin] = useState<ReadonlySet<number>>(new Set());
+
+  function onSynced(results: SyncResult[]) {
+    setNeedsLogin((prev) => {
+      const next = new Set(prev);
+      for (const r of results) {
+        if (r.error === "login_required") next.add(r.itemId);
+        else next.delete(r.itemId);
+      }
+      return next;
+    });
+    refreshAll();
+  }
+
+  // Pull history right away so Money fills in without another click
+  function syncAfterLink(done: string, retry: string) {
+    fetch("/api/plaid/sync", { method: "POST" })
+      .then((r) => r.json() as Promise<{ results?: SyncResult[] }>)
+      .then((d) => {
+        onSynced(d.results ?? []);
+        setNotice(done);
+      })
+      .catch(() => setNotice(retry));
+  }
 
   const items = data?.items ?? [];
   const allAccounts = items.flatMap((i) => i.accounts);
@@ -58,14 +83,18 @@ export default function BanksPage() {
             {data.plaidConfigured ? (
               <PlaidLinkButton
                 variant={items.length > 0 ? "secondary" : "primary"}
-                onLinked={(name) => {
+                onLinked={(name, reconnected) => {
+                  if (reconnected) {
+                    setNotice("Reconnected. Syncing…");
+                    syncAfterLink("Reconnected.", "Reconnected. Sync again in a minute.");
+                    return;
+                  }
                   setNotice(`Linked ${name ?? "your bank"}. Syncing its transactions…`);
                   refreshAll();
-                  // Pull history right away so Money fills in without another click
-                  fetch("/api/plaid/sync", { method: "POST" })
-                    .then(() => refreshAll())
-                    .then(() => setNotice(`Linked ${name ?? "your bank"}.`))
-                    .catch(() => setNotice(`Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`));
+                  syncAfterLink(
+                    `Linked ${name ?? "your bank"}.`,
+                    `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
+                  );
                 }}
               />
             ) : (
@@ -75,7 +104,7 @@ export default function BanksPage() {
               </p>
             )}
             {items.length > 1 && (
-              <SyncButton label="Sync all" size="md" onSynced={refreshAll} />
+              <SyncButton label="Sync all" size="md" onSynced={onSynced} />
             )}
           </div>
           {notice && (
@@ -94,7 +123,24 @@ export default function BanksPage() {
           ) : (
             <div className="space-y-6">
               {items.map((item, i) => (
-                <BankCard key={item.id} item={item} index={i} onChange={refreshAll} />
+                <BankCard
+                  key={item.id}
+                  item={item}
+                  index={i}
+                  needsLogin={needsLogin.has(item.id)}
+                  onChange={refreshAll}
+                  onSynced={onSynced}
+                  onReconnected={() => {
+                    setNotice(`Reconnected ${item.institutionName ?? "your bank"}. Syncing…`);
+                    fetch(`/api/plaid/sync/${item.id}`, { method: "POST" })
+                      .then((r) => r.json() as Promise<{ results?: SyncResult[] }>)
+                      .then((d) => {
+                        onSynced(d.results ?? []);
+                        setNotice(`Reconnected ${item.institutionName ?? "your bank"}.`);
+                      })
+                      .catch(() => setNotice("Reconnected. Sync again in a minute."));
+                  }}
+                />
               ))}
             </div>
           )}
@@ -104,7 +150,21 @@ export default function BanksPage() {
   );
 }
 
-function BankCard({ item, index, onChange }: { item: BankItem; index: number; onChange: () => void }) {
+function BankCard({
+  item,
+  index,
+  needsLogin,
+  onChange,
+  onSynced,
+  onReconnected,
+}: {
+  item: BankItem;
+  index: number;
+  needsLogin: boolean;
+  onChange: () => void;
+  onSynced: (results: SyncResult[]) => void;
+  onReconnected: () => void;
+}) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +208,10 @@ function BankCard({ item, index, onChange }: { item: BankItem; index: number; on
           </span>
         ) : (
           <span className="flex items-center gap-1">
-            <SyncButton itemId={item.id} variant="ghost" onSynced={onChange} />
+            {needsLogin && (
+              <PlaidLinkButton itemId={item.id} size="sm" onLinked={onReconnected} />
+            )}
+            <SyncButton itemId={item.id} variant="ghost" onSynced={onSynced} />
             <Button variant="ghost" size="sm" onClick={() => setConfirm(true)}>
               Unlink
             </Button>

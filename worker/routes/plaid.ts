@@ -25,6 +25,21 @@ plaidRoutes.post('/link-token', async (c) => {
   }
 })
 
+// A link token in update mode, to sign back in to a bank whose login changed.
+// The bank keeps its access token, so there is nothing to exchange afterwards.
+plaidRoutes.post('/link-token/:itemId', async (c) => {
+  const id = Number(c.req.param('itemId'))
+  if (!Number.isInteger(id)) return c.json({ error: 'Invalid item id' }, 400)
+  const item = await getDb(c.env.DB).query.plaidItem.findFirst({ where: (i, { eq }) => eq(i.id, id) })
+  if (!item) return c.json({ error: 'Bank not found' }, 404)
+  try {
+    const { link_token } = await plaid.linkTokenCreate(plaidRedirectUri(), item.accessToken)
+    return c.json({ link_token })
+  } catch (error) {
+    return plaidFailure(error, `linkTokenCreate item ${id}`, 'Failed to create link token')
+  }
+})
+
 plaidRoutes.post('/exchange', async (c) => {
   const db = getDb(c.env.DB)
   const body = await readJson(c)

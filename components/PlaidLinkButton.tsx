@@ -1,25 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
-import { Button, type ButtonVariant } from "@/components/ui/Button";
+import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
 
 const LINK_TOKEN_KEY = "plaid:link_token";
+// Set when the stored token reconnects a bank rather than linking a new one
+const LINK_ITEM_KEY = "plaid:link_item";
 
 // Resuming a Plaid OAuth redirect needs the link token stored before the
 // redirect plus the exact redirect URL; read both once, outside the render
 // cycle. Returns null on the server and on ordinary (non-redirect) loads.
-function readOAuthRedirect(): { token: string | null; redirectUri: string } | null {
+function readOAuthRedirect(): { token: string | null; reconnecting: boolean; redirectUri: string } | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
   if (!url.searchParams.has("oauth_state_id")) return null;
-  return { token: sessionStorage.getItem(LINK_TOKEN_KEY), redirectUri: window.location.href };
+  return {
+    token: sessionStorage.getItem(LINK_TOKEN_KEY),
+    reconnecting: sessionStorage.getItem(LINK_ITEM_KEY) != null,
+    redirectUri: window.location.href,
+  };
 }
 
+/** Links a new bank, or with itemId signs back in to a linked one (Plaid's update mode). */
 export function PlaidLinkButton({
+  itemId,
   onLinked,
   variant = "primary",
+  size = "md",
 }: {
-  onLinked: (institutionName: string | null) => void;
+  itemId?: number;
+  /** reconnected: an existing bank signed back in; there is no new bank */
+  onLinked: (institutionName: string | null, reconnected: boolean) => void;
   variant?: ButtonVariant;
+  size?: ButtonSize;
 }) {
   const [oauthRedirect] = useState(readOAuthRedirect);
   const [linkToken, setLinkToken] = useState<string | null>(oauthRedirect?.token ?? null);
@@ -36,13 +48,12 @@ export function PlaidLinkButton({
       return;
     }
     let cancelled = false;
-    fetch("/api/plaid/link-token", { method: "POST" })
+    fetch(itemId != null ? `/api/plaid/link-token/${itemId}` : "/api/plaid/link-token", { method: "POST" })
       .then((r) => r.json() as Promise<{ link_token?: string; error?: string }>)
       .then((d) => {
         if (cancelled) return;
         if (d.link_token) {
           setLinkToken(d.link_token);
-          sessionStorage.setItem(LINK_TOKEN_KEY, d.link_token);
         } else {
           setError(d.error ?? "Plaid isn’t set up.");
         }
@@ -53,10 +64,19 @@ export function PlaidLinkButton({
     return () => {
       cancelled = true;
     };
-  }, [oauthRedirect]);
+  }, [oauthRedirect, itemId]);
 
   const onSuccess = useCallback(
     async (publicToken: string) => {
+      const reconnected = itemId != null || Boolean(oauthRedirect?.reconnecting);
+      if (reconnected) {
+        // The bank keeps its access token; nothing to exchange
+        sessionStorage.removeItem(LINK_TOKEN_KEY);
+        sessionStorage.removeItem(LINK_ITEM_KEY);
+        if (receivedRedirectUri) window.history.replaceState({}, "", window.location.pathname);
+        onLinked(null, true);
+        return;
+      }
       setLinking(true);
       setError(null);
       try {
@@ -69,14 +89,14 @@ export function PlaidLinkButton({
         if (!res.ok) throw new Error(data.error ?? "Linking failed");
         sessionStorage.removeItem(LINK_TOKEN_KEY);
         if (receivedRedirectUri) window.history.replaceState({}, "", window.location.pathname);
-        onLinked(data.institution_name ?? null);
+        onLinked(data.institution_name ?? null, false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Linking failed");
       } finally {
         setLinking(false);
       }
     },
-    [onLinked, receivedRedirectUri]
+    [onLinked, receivedRedirectUri, itemId, oauthRedirect]
   );
 
   const { open, ready } = usePlaidLink({ token: linkToken, receivedRedirectUri, onSuccess });
@@ -87,10 +107,20 @@ export function PlaidLinkButton({
     open();
   }, [receivedRedirectUri, ready, open]);
 
+  // Stored on open, not on fetch: with a Reconnect button on the page too, the
+  // token an OAuth redirect resumes must be the one that was opened.
+  function openLink() {
+    if (!linkToken) return;
+    sessionStorage.setItem(LINK_TOKEN_KEY, linkToken);
+    if (itemId != null) sessionStorage.setItem(LINK_ITEM_KEY, String(itemId));
+    else sessionStorage.removeItem(LINK_ITEM_KEY);
+    open();
+  }
+
   return (
     <span className="inline-flex flex-col items-start gap-1">
-      <Button variant={variant} onClick={() => open()} disabled={!ready || !linkToken || linking}>
-        {linking ? "Linking…" : "+ Link a bank"}
+      <Button variant={variant} size={size} onClick={openLink} disabled={!ready || !linkToken || linking}>
+        {linking ? "Linking…" : itemId != null ? "Reconnect" : "+ Link a bank"}
       </Button>
       {error && (
         <span role="alert" className="text-xs text-danger font-semibold">

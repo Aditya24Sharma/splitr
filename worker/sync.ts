@@ -2,13 +2,16 @@ import { toCents } from '@/lib/money'
 import { todayLocal } from '@/lib/spending'
 import type { Db } from './db'
 import { plaidItem } from './db/schema'
-import { PlaidApiError, plaid, type PlaidAccount, type PlaidTransaction } from './plaid'
+import { PlaidApiError, PlaidConfigError, describeError, plaid, type PlaidAccount, type PlaidTransaction } from './plaid'
 
 export interface SyncResult {
   itemId: number
+  institutionName: string | null
   added: number
   modified: number
   removed: number
+  /** This bank failed; the others still sync. login_required: reconnect it on Banks. */
+  error?: 'login_required' | 'failed'
 }
 
 const cents = (v: number | null | undefined) => (v != null ? toCents(v) : null)
@@ -123,10 +126,23 @@ export function deleteTransactions(d1: D1Database, plaidIds: string[]) {
     WHERE "plaidTransactionId" IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(plaidIds))
 }
 
+/** Syncs one bank. Its failure is logged and returned, so it doesn't stop the others. */
 export async function syncItem(db: Db, itemDbId: number): Promise<SyncResult> {
   const item = await db.query.plaidItem.findFirst({ where: (i, { eq }) => eq(i.id, itemDbId) })
   if (!item) throw new Error(`Plaid item ${itemDbId} not found`)
 
+  const base = { itemId: item.id, institutionName: item.institutionName }
+  try {
+    return { ...base, ...(await pullItem(db, item)) }
+  } catch (error) {
+    if (error instanceof PlaidConfigError) throw error
+    console.error(`[plaid] sync ${item.institutionName ?? 'bank'} (item ${item.id}) failed: ${describeError(error)}`, error)
+    const loginRequired = error instanceof PlaidApiError && error.code === 'ITEM_LOGIN_REQUIRED'
+    return { ...base, added: 0, modified: 0, removed: 0, error: loginRequired ? 'login_required' : 'failed' }
+  }
+}
+
+async function pullItem(db: Db, item: typeof plaidItem.$inferSelect) {
   const { accounts } = await plaid.accountsGet(item.accessToken)
 
   const added: PlaidTransaction[] = []
@@ -174,7 +190,7 @@ export async function syncItem(db: Db, itemDbId: number): Promise<SyncResult> {
     d1.prepare('UPDATE "PlaidItem" SET "cursor" = ? WHERE "id" = ?').bind(cursor ?? null, item.id),
   ])
 
-  return { itemId: item.id, added: added.length, modified: modified.length, removed: removed.length }
+  return { added: added.length, modified: modified.length, removed: removed.length }
 }
 
 export async function syncAllItems(db: Db): Promise<SyncResult[]> {
