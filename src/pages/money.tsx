@@ -302,12 +302,9 @@ export default function MoneyPage() {
           {/* ── Where it went ─────────────────────────────────────────────── */}
           {summary.byCategory.length > 0 && (
             <section aria-labelledby="where-heading" className="space-y-3">
-              <div className="flex items-baseline justify-between px-1">
-                <h2 id="where-heading" className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                  Where it went
-                </h2>
-                <p className="text-xs text-ink-muted">Your share · tap to filter</p>
-              </div>
+              <h2 id="where-heading" className="px-1 text-xs font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Where it went
+              </h2>
               <ul className="rounded-3xl border border-ink divide-y divide-rim overflow-hidden">
                 {categories.map(({ category: c, cents }) => {
                   const on = category === c;
