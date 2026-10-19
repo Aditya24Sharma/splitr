@@ -276,7 +276,7 @@ export default function ExpenseDetailPage() {
     <div className="space-y-8">
       <Link
         href="/splits"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink transition-colors"
+        className="tap-area inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink transition-colors"
       >
         ← Splits
       </Link>

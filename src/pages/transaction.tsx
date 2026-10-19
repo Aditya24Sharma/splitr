@@ -135,7 +135,7 @@ export default function TransactionPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink">
+      <Link href="/" className="tap-area inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink">
         ← Money
       </Link>
 

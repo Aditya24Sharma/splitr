@@ -352,7 +352,7 @@ export default function NewSimplePage() {
       <header>
         <Link
           href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
+          className="tap-area text-sm font-semibold text-ink-muted hover:text-ink"
         >
           ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
         </Link>
@@ -434,7 +434,7 @@ export default function NewSimplePage() {
           {sourceTx && !people.some((p) => p.isMe) && (
             <p className="text-sm text-ink-muted">
               Pick yourself. To skip this next time, mark yourself as{" "}
-              <Link href="/people" className="font-semibold underline underline-offset-4">This is me</Link>.
+              <Link href="/people" className="tap-area font-semibold underline underline-offset-4">This is me</Link>.
             </p>
           )}
           </>

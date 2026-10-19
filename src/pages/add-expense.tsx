@@ -87,7 +87,7 @@ export default function AddExpensePage() {
       <header>
         <Link
           href={editId ? `/transactions/${editId}` : "/"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
+          className="tap-area text-sm font-semibold text-ink-muted hover:text-ink"
         >
           ← {editId ? "Back to expense" : "Money"}
         </Link>

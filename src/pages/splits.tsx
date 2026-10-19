@@ -109,7 +109,7 @@ function Tick({
       aria-label={label}
       onClick={onToggle}
       className={[
-        "w-6 h-6 shrink-0 rounded-full border border-ink inline-flex items-center justify-center text-xs font-bold transition-colors",
+        "tap-area w-6 h-6 shrink-0 rounded-full border border-ink inline-flex items-center justify-center text-xs font-bold transition-colors",
         "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun",
         checked ? "bg-ink text-white" : "bg-surface text-transparent hover:bg-sun",
       ].join(" ")}
@@ -326,7 +326,7 @@ export default function SplitsPage() {
                 <button
                   type="button"
                   onClick={() => setFilter("logged", "not-logged")}
-                  className="underline underline-offset-4 hover:text-ink"
+                  className="tap-area underline underline-offset-4 hover:text-ink"
                 >
                   {notLogged} not in Splitwise yet
                 </button>
@@ -525,7 +525,7 @@ export default function SplitsPage() {
               <button
                 type="button"
                 onClick={() => setFilters((f) => ({ ...NO_FILTERS, query: f.query }))}
-                className="h-8 px-2 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
+                className="tap-area h-8 px-2 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
               >
                 Clear all
               </button>

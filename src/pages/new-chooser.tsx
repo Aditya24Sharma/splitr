@@ -47,7 +47,7 @@ export default function NewExpensePage() {
         {tx && (
           <Link
             href={`/transactions/${tx.id}`}
-            className="text-sm font-semibold text-ink-muted hover:text-ink"
+            className="tap-area text-sm font-semibold text-ink-muted hover:text-ink"
           >
             ← Back to charge
           </Link>

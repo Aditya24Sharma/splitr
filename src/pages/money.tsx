@@ -339,7 +339,7 @@ export default function MoneyPage() {
                 <button
                   type="button"
                   onClick={() => setShowAllCategories((v) => !v)}
-                  className="px-1 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
+                  className="tap-area px-1 text-sm font-semibold text-ink-muted underline underline-offset-4 hover:text-ink"
                 >
                   {showAllCategories ? "Show fewer" : `Show all ${summary.byCategory.length}`}
                 </button>

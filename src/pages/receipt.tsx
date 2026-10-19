@@ -381,7 +381,7 @@ export default function NewItemizedPage() {
       <header>
         <Link
           href={editId ? `/expenses/${editId}` : fromTx ? `/expenses/new?fromTx=${fromTx}` : "/expenses/new"}
-          className="text-sm font-semibold text-ink-muted hover:text-ink"
+          className="tap-area text-sm font-semibold text-ink-muted hover:text-ink"
         >
           ← {editId ? "Back to expense" : fromTx ? "Split it" : "New"}
         </Link>
