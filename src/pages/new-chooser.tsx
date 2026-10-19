@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { accountsQuery, transactionQuery } from "../queries";
+import { BackLink } from "@/components/BackLink";
 import Link, { useQueryString } from "@/components/Link";
 import { formatUSD } from "@/lib/money";
 import { accountLabel, indexAccounts } from "@/lib/bank-types";
@@ -45,12 +46,7 @@ export default function NewExpensePage() {
     <div className="space-y-8">
       <header>
         {tx && (
-          <Link
-            href={`/transactions/${tx.id}`}
-            className="tap-area text-sm font-semibold text-ink-muted hover:text-ink"
-          >
-            ← Back to charge
-          </Link>
+          <BackLink href={`/transactions/${tx.id}`} label="Back to charge" />
         )}
         <h1 className={`${tx ? "mt-4 " : ""}font-display text-6xl sm:text-7xl uppercase`}>
           {tx ? "Split it" : "New"}

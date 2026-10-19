@@ -4,6 +4,7 @@ import { accountsQuery, expenseQuery, isNotFound, peopleQuery, transactionQuery,
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
+import { BackLink } from "@/components/BackLink";
 import { BankLogo } from "@/components/BankLogo";
 import { DeleteSection } from "@/components/DeleteSection";
 import { PersonChip } from "@/components/PersonChip";
@@ -134,9 +135,7 @@ export default function TransactionPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/" className="tap-area inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink">
-        ← Money
-      </Link>
+      <BackLink href="/" label="Back to Money" />
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header>

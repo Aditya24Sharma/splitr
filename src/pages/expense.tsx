@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { expenseQuery, isNotFound, peopleQuery, useRefreshAll } from "../queries";
 import Link, { useGoTo, useRouteParam } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
+import { BackLink } from "@/components/BackLink";
 import { CopyButton } from "@/components/CopyButton";
 import { DeleteSection } from "@/components/DeleteSection";
 import { PersonChip } from "@/components/PersonChip";
@@ -273,12 +274,7 @@ export default function ExpenseDetailPage() {
 
   return (
     <div className="space-y-8">
-      <Link
-        href="/splits"
-        className="tap-area inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink transition-colors"
-      >
-        ← Splits
-      </Link>
+      <BackLink href="/splits" label="Back to Splits" />
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header>
