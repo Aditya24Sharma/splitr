@@ -1,5 +1,5 @@
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
-import AppNav from "@/components/AppNav";
+import AppNav, { BottomTabs } from "@/components/AppNav";
 import Link from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import MoneyPage from "./pages/money";
@@ -18,9 +18,11 @@ function Layout() {
   return (
     <>
       <AppNav />
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-10 pb-32 sm:px-6">
+      {/* Bottom space clears the phone tab bar and the iPhone home indicator */}
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pt-10 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6">
         <Outlet />
       </main>
+      <BottomTabs />
     </>
   );
 }

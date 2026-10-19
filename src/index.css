@@ -75,6 +75,11 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Height of the phone tab bar, including the iPhone home-indicator strip */
+:root {
+  --tabbar: calc(3.75rem + env(safe-area-inset-bottom));
+}
+
 html {
   font-family: var(--font-sans);
   color: var(--color-ink);

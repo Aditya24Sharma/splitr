@@ -88,7 +88,7 @@ export function SelectionBar({
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-3 sm:pb-5 pointer-events-none">
+    <div className="fixed inset-x-0 bottom-[var(--tabbar)] sm:bottom-0 z-50 px-3 pb-3 sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))] pointer-events-none">
       <div
         className="rise pointer-events-auto mx-auto max-w-3xl rounded-3xl border border-ink bg-sun shadow-[0_8px_0_0_#0B0B0C]"
         role="region"
