@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { tagsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -39,18 +40,15 @@ export default function TagsPage() {
   // ---- Add form ----
   const [addName, setAddName] = useState("");
   const [addPending, setAddPending] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
 
   // ---- Inline rename ----
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPending, setEditPending] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   // ---- Delete confirmation ----
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Add
@@ -60,7 +58,6 @@ export default function TagsPage() {
     e.preventDefault();
     if (!addName.trim()) return;
     setAddPending(true);
-    setAddError(null);
     try {
       const res = await fetch("/api/tags", {
         method: "POST",
@@ -71,7 +68,7 @@ export default function TagsPage() {
       setAddName("");
       await refreshAll();
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Failed to add tag.");
+      toast.error(err instanceof Error ? err.message : "Couldn’t add the tag.");
     } finally {
       setAddPending(false);
     }
@@ -84,7 +81,6 @@ export default function TagsPage() {
   function startEdit(tag: Tag) {
     setEditId(tag.id);
     setEditName(tag.name);
-    setEditError(null);
     setDeleteId(null);
   }
 
@@ -92,7 +88,6 @@ export default function TagsPage() {
     e.preventDefault();
     if (!editId || !editName.trim()) return;
     setEditPending(true);
-    setEditError(null);
     try {
       const res = await fetch(`/api/tags/${editId}`, {
         method: "PATCH",
@@ -103,7 +98,7 @@ export default function TagsPage() {
       setEditId(null);
       await refreshAll();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Failed to rename tag.");
+      toast.error(err instanceof Error ? err.message : "Couldn’t rename the tag.");
     } finally {
       setEditPending(false);
     }
@@ -115,7 +110,6 @@ export default function TagsPage() {
 
   async function handleDelete(id: string) {
     setDeletePending(true);
-    setDeleteError(null);
     try {
       const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await errorMessage(res));
@@ -123,7 +117,7 @@ export default function TagsPage() {
       await refreshAll();
     } catch {
       // Keep the confirmation open so the user can retry
-      setDeleteError("Couldn't delete — try again.");
+      toast.error("Couldn’t delete the tag. Try again.");
     } finally {
       setDeletePending(false);
     }
@@ -168,7 +162,7 @@ export default function TagsPage() {
             <div key={tag.id} className="px-5 py-3.5 bg-surface">
               {editId === tag.id ? (
                 /* ---- Inline rename form ---- */
-                <form onSubmit={handleRename} className="space-y-2">
+                <form onSubmit={handleRename}>
                   <div className="flex items-center gap-2">
                     <Input
                       value={editName}
@@ -193,55 +187,23 @@ export default function TagsPage() {
                       Cancel
                     </Button>
                   </div>
-                  {editError && (
-                    <p className="text-xs text-danger" role="alert">
-                      {editError}
-                    </p>
-                  )}
                 </form>
               ) : (
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">#{tag.name}</p>
-                    <p className="text-xs text-ink-muted">
-                      {expensesLabel(tag.expenseCount)}
-                    </p>
-                  </div>
-
-                  {deleteId === tag.id ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm text-ink-muted">
-                        {tag.expenseCount > 0
-                          ? `Remove from ${expensesLabel(tag.expenseCount)} and delete?`
-                          : "Delete this tag?"}
-                      </span>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleDelete(tag.id)}
-                        disabled={deletePending}
-                      >
-                        {deletePending ? "Deleting…" : "Delete"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeleteId(null)}
-                      >
-                        Cancel
-                      </Button>
-                      {deleteError && (
-                        <p className="w-full text-xs text-danger" role="alert">
-                          {deleteError}
-                        </p>
-                      )}
+                <>
+                  {/* One line at any width: a long name shortens, the buttons never wrap */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">#{tag.name}</p>
+                      <p className="text-xs text-ink-muted">
+                        {expensesLabel(tag.expenseCount)}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="shrink-0 flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => startEdit(tag)}
+                        disabled={deleteId === tag.id}
                       >
                         Rename
                       </Button>
@@ -250,15 +212,43 @@ export default function TagsPage() {
                         size="sm"
                         onClick={() => {
                           setDeleteId(tag.id);
-                          setDeleteError(null);
                           setEditId(null);
                         }}
+                        disabled={deleteId === tag.id}
                       >
                         Delete
                       </Button>
                     </div>
+                  </div>
+
+                  {deleteId === tag.id && (
+                    <div className="mt-3 flex items-center gap-2 flex-wrap">
+                      <span className="mr-auto text-sm text-ink-muted">
+                        {tag.expenseCount > 0
+                          ? `Remove from ${expensesLabel(tag.expenseCount)} and delete?`
+                          : "Delete this tag?"}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDelete(tag.id)}
+                          disabled={deletePending}
+                        >
+                          {deletePending ? "Deleting…" : "Delete"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteId(null)}
+                          disabled={deletePending}
+                        >
+                          Cancel
+                        </Button>
+                      </span>
+                    </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           ))}
@@ -285,11 +275,6 @@ export default function TagsPage() {
               {addPending ? "Adding…" : "Add"}
             </Button>
           </div>
-          {addError && (
-            <p className="text-xs text-danger" role="alert">
-              {addError}
-            </p>
-          )}
         </form>
       </div>
     </div>
