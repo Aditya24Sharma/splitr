@@ -106,12 +106,13 @@ function listEnv(name: string, fallback: string): string[] {
 }
 
 export const plaid = {
-  linkTokenCreate: (redirectUri?: string) =>
+  /** With an access token, Link opens in update mode to sign back in to that bank. */
+  linkTokenCreate: (redirectUri?: string, accessToken?: string) =>
     call<{ link_token: string }>('/link/token/create', {
       client_name: 'Splitr',
       language: 'en',
       user: { client_user_id: PLAID_USER_ID },
-      products: listEnv('PLAID_PRODUCTS', 'transactions'),
+      ...(accessToken ? { access_token: accessToken } : { products: listEnv('PLAID_PRODUCTS', 'transactions') }),
       country_codes: listEnv('PLAID_COUNTRY_CODES', 'US'),
       ...(redirectUri && { redirect_uri: redirectUri }),
     }),
@@ -147,6 +148,15 @@ export const plaid = {
     }>('/transactions/sync', { access_token: accessToken, ...(cursor && { cursor }) }),
 
   itemRemove: (accessToken: string) => call<object>('/item/remove', { access_token: accessToken }),
+}
+
+/**
+ * The reason, as one line of text. Workers Logs keeps only the stack of an
+ * Error passed to console.error, not its message, so log lines carry this.
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof PlaidApiError) return `${error.code}: ${error.message}`
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function plaidRedirectUri(): string | undefined {
