@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, type ButtonVariant } from "@/components/ui/Button";
+import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
 
 interface SyncResult {
   added: number;
@@ -12,11 +12,14 @@ export function SyncButton({
   itemId,
   label = "Sync",
   variant = "secondary",
+  size = "sm",
   onSynced,
 }: {
   itemId?: number;
   label?: string;
   variant?: ButtonVariant;
+  /** Match the button beside it */
+  size?: ButtonSize;
   onSynced: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -41,7 +44,7 @@ export function SyncButton({
 
   return (
     <span className="inline-flex items-center gap-2">
-      <Button variant={variant} size="sm" onClick={sync} disabled={busy}>
+      <Button variant={variant} size={size} onClick={sync} disabled={busy}>
         <span aria-hidden="true" className={busy ? "inline-block animate-spin" : ""}>↻</span>
         {busy ? "Syncing…" : label}
       </Button>

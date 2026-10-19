@@ -78,7 +78,7 @@ export default function BanksPage() {
               </p>
             )}
             {items.length > 1 && (
-              <SyncButton label="Sync all" onSynced={refreshAll} />
+              <SyncButton label="Sync all" size="md" onSynced={refreshAll} />
             )}
           </div>
           {notice && (
