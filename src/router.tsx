@@ -1,6 +1,7 @@
 import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
 import AppNav, { BottomTabs } from "@/components/AppNav";
 import Link from "@/components/Link";
+import { Toasts } from "@/components/Toasts";
 import { Button } from "@/components/ui/Button";
 import MoneyPage from "./pages/money";
 import SplitsPage from "./pages/splits";
@@ -27,6 +28,7 @@ function Layout() {
         </div>
       </main>
       <BottomTabs />
+      <Toasts />
     </>
   );
 }
