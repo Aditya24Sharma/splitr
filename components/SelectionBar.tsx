@@ -1,6 +1,6 @@
 /**
  * SelectionBar — sticks to the bottom of the screen while expenses are ticked.
- * One row of actions; "Settle up" and "Tag" open a panel above that row.
+ * One row of actions; "Settle up", "Shares" and "Tag" open a panel above that row.
  */
 
 import { useEffect, useState } from "react";
@@ -15,6 +15,7 @@ interface SelectedExpense {
   totalCents: number;
   loggedToSplitwise: boolean;
   tags: string[];
+  breakdown: { perPerson: { personId: string; cents: number }[] };
 }
 
 interface SelectionBarProps {
@@ -27,7 +28,7 @@ interface SelectionBarProps {
   onClear: () => void;
 }
 
-type Panel = "none" | "settle" | "tag" | "delete";
+type Panel = "none" | "settle" | "shares" | "tag" | "delete";
 
 export function SelectionBar({
   selected,
@@ -44,6 +45,17 @@ export function SelectionBar({
   const count = selected.length;
   const totalCents = selected.reduce((sum, e) => sum + e.totalCents, 0);
   const allLogged = selected.every((e) => e.loggedToSplitwise);
+
+  // Each person's share summed across the selection, whoever paid; largest first
+  const shareCents = new Map<string, number>();
+  for (const e of selected) {
+    for (const { personId, cents } of e.breakdown.perPerson) {
+      shareCents.set(personId, (shareCents.get(personId) ?? 0) + cents);
+    }
+  }
+  const shares = [...shareCents].sort(
+    ([a, x], [b, y]) => y - x || personName(a).localeCompare(personName(b))
+  );
 
   // Esc closes the open panel first, then clears the selection
   useEffect(() => {
@@ -125,6 +137,21 @@ export function SelectionBar({
           </div>
         )}
 
+        {panel === "shares" && (
+          <div className="px-5 pt-5 pb-2">
+            <ul className="space-y-1.5">
+              {shares.map(([personId, cents]) => (
+                <li key={personId} className="flex items-baseline gap-3">
+                  <span className="flex-1 min-w-0 truncate text-sm font-semibold">
+                    {personName(personId)}
+                  </span>
+                  <span className="font-display text-3xl tabular-nums">{formatUSD(cents)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {panel === "tag" && (
           <div className="px-5 pt-5 pb-2">
             {tagList.length === 0 ? (
@@ -190,7 +217,7 @@ export function SelectionBar({
             </p>
             <ClearButton onClear={onClear} className="inline-flex sm:hidden" />
           </div>
-          <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2">
+          <div className="grid grid-cols-5 gap-1.5 sm:flex sm:gap-2">
             <Button
               variant={panel === "settle" ? "primary" : "secondary"}
               size="sm"
@@ -198,6 +225,14 @@ export function SelectionBar({
               onClick={() => toggle("settle")}
             >
               Settle<span className="hidden sm:inline">up</span>
+            </Button>
+            <Button
+              variant={panel === "shares" ? "primary" : "secondary"}
+              size="sm"
+              className="px-2 sm:px-3.5"
+              onClick={() => toggle("shares")}
+            >
+              Shares
             </Button>
             <Button
               variant={panel === "tag" ? "primary" : "secondary"}
