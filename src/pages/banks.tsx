@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { accountsQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Field";
 import { BankLogo } from "@/components/BankLogo";
 import { SyncButton, type SyncResult } from "@/components/SyncButton";
 import { PlaidLinkButton } from "@/components/PlaidLinkButton";
 import { formatUSD } from "@/lib/money";
-import { netBalance } from "@/lib/spending";
+import { DEFAULT_HISTORY_START, earliestHistoryStart } from "@/lib/plaid-history";
+import { netBalance, todayLocal } from "@/lib/spending";
 import { lastSynced, timeAgo, type BankItem } from "@/lib/bank-types";
 
 export default function BanksPage() {
@@ -15,6 +17,12 @@ export default function BanksPage() {
   const refreshAll = useRefreshAll();
   // Banks whose last sync said to sign in again. Kept until they sync cleanly.
   const [needsLogin, setNeedsLogin] = useState<ReadonlySet<number>>(new Set());
+  // How far back a newly linked bank's transactions go
+  const today = todayLocal();
+  const earliestStart = earliestHistoryStart(today);
+  const [historyStart, setHistoryStart] = useState(() =>
+    DEFAULT_HISTORY_START < earliestStart ? earliestStart : DEFAULT_HISTORY_START
+  );
 
   function onSynced(results: SyncResult[]) {
     setNeedsLogin((prev) => {
@@ -80,27 +88,42 @@ export default function BanksPage() {
 
           <div className="flex items-start gap-2 flex-wrap">
             {data.plaidConfigured ? (
-              <PlaidLinkButton
-                variant={items.length > 0 ? "secondary" : "primary"}
-                onLinked={(name, reconnected) => {
-                  if (reconnected) {
+              <>
+                <label className="flex items-center gap-2 text-sm font-semibold whitespace-nowrap">
+                  History from
+                  <Input
+                    type="date"
+                    className="max-w-40"
+                    value={historyStart}
+                    min={earliestStart}
+                    max={today}
+                    // Cleared or partly typed reads as ""; keep the last full date
+                    onChange={(e) => e.target.value && setHistoryStart(e.target.value)}
+                  />
+                </label>
+                <PlaidLinkButton
+                  historyStart={historyStart}
+                  variant={items.length > 0 ? "secondary" : "primary"}
+                  onLinked={(name, reconnected) => {
+                    if (reconnected) {
+                      syncAfterLink(
+                        "/api/plaid/sync",
+                        "Reconnected. Syncing…",
+                        "Reconnected",
+                        "Reconnected. Sync again in a minute."
+                      );
+                      return;
+                    }
+                    refreshAll();
                     syncAfterLink(
                       "/api/plaid/sync",
-                      "Reconnected. Syncing…",
-                      "Reconnected",
-                      "Reconnected. Sync again in a minute."
+                      `Linked ${name ?? "your bank"}. Syncing…`,
+                      `Linked ${name ?? "your bank"}`,
+                      `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
                     );
-                    return;
-                  }
-                  refreshAll();
-                  syncAfterLink(
-                    "/api/plaid/sync",
-                    `Linked ${name ?? "your bank"}. Syncing…`,
-                    `Linked ${name ?? "your bank"}`,
-                    `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
-                  );
-                }}
-              />
+                  }}
+                />
+              </>
             ) : (
               <p className="text-sm rounded-2xl border border-ink bg-sun/40 px-4 py-2.5">
                 Plaid isn’t set up. Add your keys to <code className="font-mono">.env.local</code> (see{" "}

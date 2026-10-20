@@ -6,6 +6,8 @@ import { account, plaidItem } from '../db/schema'
 import { readJson } from '../http'
 import { PlaidConfigError, describeError, plaid, plaidRedirectUri } from '../plaid'
 import { accountFields, syncAllItems, syncItem } from '../sync'
+import { DEFAULT_HISTORY_START, historyDays } from '@/lib/plaid-history'
+import { todayLocal } from '@/lib/spending'
 
 export const plaidRoutes = new Hono<AppEnv>()
 
@@ -16,9 +18,15 @@ function plaidFailure(error: unknown, label: string, message: string) {
   return Response.json({ error: message }, { status: 500 })
 }
 
+// history_start (YYYY-MM-DD) is how far back the new bank's transactions go.
 plaidRoutes.post('/link-token', async (c) => {
+  const body = await readJson(c)
+  if (body instanceof Response) return body
+  const start = (body as { history_start?: string } | null)?.history_start ?? DEFAULT_HISTORY_START
+  const daysRequested = historyDays(start, todayLocal())
+  if (daysRequested == null) return c.json({ error: 'history_start must be a date (YYYY-MM-DD)' }, 400)
   try {
-    const { link_token } = await plaid.linkTokenCreate(plaidRedirectUri())
+    const { link_token } = await plaid.linkTokenCreate(plaidRedirectUri(), { daysRequested })
     return c.json({ link_token })
   } catch (error) {
     return plaidFailure(error, 'linkTokenCreate', 'Failed to create link token')
@@ -33,7 +41,7 @@ plaidRoutes.post('/link-token/:itemId', async (c) => {
   const item = await getDb(c.env.DB).query.plaidItem.findFirst({ where: (i, { eq }) => eq(i.id, id) })
   if (!item) return c.json({ error: 'Bank not found' }, 404)
   try {
-    const { link_token } = await plaid.linkTokenCreate(plaidRedirectUri(), item.accessToken)
+    const { link_token } = await plaid.linkTokenCreate(plaidRedirectUri(), { accessToken: item.accessToken })
     return c.json({ link_token })
   } catch (error) {
     return plaidFailure(error, `linkTokenCreate item ${id}`, 'Failed to create link token')

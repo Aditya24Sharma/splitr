@@ -24,18 +24,25 @@ function readOAuthRedirect(): { token: string | null; reconnecting: boolean; red
 /** Links a new bank, or with itemId signs back in to a linked one (Plaid's update mode). */
 export function PlaidLinkButton({
   itemId,
+  historyStart,
   onLinked,
   variant = "primary",
   size = "md",
 }: {
   itemId?: number;
+  /** A new bank's transactions go back to this date (YYYY-MM-DD); ignored with itemId */
+  historyStart?: string;
   /** reconnected: an existing bank signed back in; there is no new bank */
   onLinked: (institutionName: string | null, reconnected: boolean) => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
 }) {
   const [oauthRedirect] = useState(readOAuthRedirect);
-  const [linkToken, setLinkToken] = useState<string | null>(oauthRedirect?.token ?? null);
+  // A token carries the history start it was made for, so a new date waits
+  // for a new token. An OAuth redirect resumes the token it stored.
+  const [fetched, setFetched] = useState<{ token: string; historyStart?: string } | null>(null);
+  const linkToken =
+    oauthRedirect?.token ?? (fetched && fetched.historyStart === historyStart ? fetched.token : null);
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(
     oauthRedirect && !oauthRedirect.token ? "The bank sign-in expired. Please try linking again." : null
@@ -49,12 +56,20 @@ export function PlaidLinkButton({
       return;
     }
     let cancelled = false;
-    fetch(itemId != null ? `/api/plaid/link-token/${itemId}` : "/api/plaid/link-token", { method: "POST" })
+    const request =
+      itemId != null
+        ? fetch(`/api/plaid/link-token/${itemId}`, { method: "POST" })
+        : fetch("/api/plaid/link-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ history_start: historyStart }),
+          });
+    request
       .then((r) => r.json() as Promise<{ link_token?: string; error?: string }>)
       .then((d) => {
         if (cancelled) return;
         if (d.link_token) {
-          setLinkToken(d.link_token);
+          setFetched({ token: d.link_token, historyStart });
         } else {
           setError(d.error ?? "Plaid isn’t set up.");
         }
@@ -65,7 +80,7 @@ export function PlaidLinkButton({
     return () => {
       cancelled = true;
     };
-  }, [oauthRedirect, itemId]);
+  }, [oauthRedirect, itemId, historyStart]);
 
   const onSuccess = useCallback(
     async (publicToken: string) => {

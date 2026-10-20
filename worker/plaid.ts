@@ -104,26 +104,19 @@ export const PLAID_USER_ID = 'local-user'
 function listEnv(name: string, fallback: string): string[] {
   return (process.env[name] ?? fallback).split(',').map(v => v.trim())
 }
-
-// Plaid takes history as a number of days back from today, up to 730, and
-// only reads it when a bank is first linked.
-const HISTORY_START = Date.UTC(2026, 0, 1)
-
-function daysOfHistory(): number {
-  const days = Math.ceil((Date.now() - HISTORY_START) / 86_400_000) + 1
-  return Math.min(Math.max(days, 1), 730)
-}
-
 export const plaid = {
-  /** With an access token, Link opens in update mode to sign back in to that bank. */
-  linkTokenCreate: (redirectUri?: string, accessToken?: string) =>
+  /**
+   * A new bank fetches daysRequested of history. With an access token, Link
+   * opens in update mode to sign back in to that bank, and history is unchanged.
+   */
+  linkTokenCreate: (redirectUri: string | undefined, link: { daysRequested: number } | { accessToken: string }) =>
     call<{ link_token: string }>('/link/token/create', {
       client_name: 'Splitr',
       language: 'en',
       user: { client_user_id: PLAID_USER_ID },
-      ...(accessToken
-        ? { access_token: accessToken }
-        : { products: listEnv('PLAID_PRODUCTS', 'transactions'), transactions: { days_requested: daysOfHistory() } }),
+      ...('accessToken' in link
+        ? { access_token: link.accessToken }
+        : { products: listEnv('PLAID_PRODUCTS', 'transactions'), transactions: { days_requested: link.daysRequested } }),
       country_codes: listEnv('PLAID_COUNTRY_CODES', 'US'),
       ...(redirectUri && { redirect_uri: redirectUri }),
     }),
