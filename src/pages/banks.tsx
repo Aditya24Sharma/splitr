@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { accountsQuery, useRefreshAll } from "../queries";
@@ -23,6 +23,7 @@ export default function BanksPage() {
   const [historyStart, setHistoryStart] = useState(() =>
     DEFAULT_HISTORY_START < earliestStart ? earliestStart : DEFAULT_HISTORY_START
   );
+  const linkDialog = useRef<HTMLDialogElement>(null);
 
   function onSynced(results: SyncResult[]) {
     setNeedsLogin((prev) => {
@@ -89,40 +90,63 @@ export default function BanksPage() {
           <div className="flex items-start gap-2 flex-wrap">
             {data.plaidConfigured ? (
               <>
-                <label className="flex items-center gap-2 text-sm font-semibold whitespace-nowrap">
-                  History from
-                  <Input
-                    type="date"
-                    className="max-w-40"
-                    value={historyStart}
-                    min={earliestStart}
-                    max={today}
-                    // Cleared or partly typed reads as ""; keep the last full date
-                    onChange={(e) => e.target.value && setHistoryStart(e.target.value)}
-                  />
-                </label>
-                <PlaidLinkButton
-                  historyStart={historyStart}
+                <Button
                   variant={items.length > 0 ? "secondary" : "primary"}
-                  onLinked={(name, reconnected) => {
-                    if (reconnected) {
-                      syncAfterLink(
-                        "/api/plaid/sync",
-                        "Reconnected. Syncing…",
-                        "Reconnected",
-                        "Reconnected. Sync again in a minute."
-                      );
-                      return;
-                    }
-                    refreshAll();
-                    syncAfterLink(
-                      "/api/plaid/sync",
-                      `Linked ${name ?? "your bank"}. Syncing…`,
-                      `Linked ${name ?? "your bank"}`,
-                      `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
-                    );
-                  }}
-                />
+                  onClick={() => linkDialog.current?.showModal()}
+                >
+                  + Link a bank
+                </Button>
+                {/* Always rendered, so the link button inside can resume a Plaid OAuth redirect */}
+                <dialog
+                  ref={linkDialog}
+                  className="m-auto w-full max-w-sm rounded-3xl border border-ink bg-surface p-6 backdrop:bg-ink/40"
+                >
+                  <h2 className="font-display text-3xl uppercase">Link a bank</h2>
+                  <label className="mt-4 flex items-center gap-2 text-sm font-semibold whitespace-nowrap">
+                    History from
+                    <Input
+                      type="date"
+                      className="max-w-40"
+                      value={historyStart}
+                      min={earliestStart}
+                      max={today}
+                      // Cleared, partly typed, or out of Plaid's range: keep the last valid date
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && v >= earliestStart && v <= today) setHistoryStart(v);
+                      }}
+                    />
+                  </label>
+                  <div className="mt-6 flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => linkDialog.current?.close()}>
+                      Cancel
+                    </Button>
+                    <PlaidLinkButton
+                      label="Link"
+                      historyStart={historyStart}
+                      // A modal dialog would sit above Plaid's window and block it
+                      onOpen={() => linkDialog.current?.close()}
+                      onLinked={(name, reconnected) => {
+                        if (reconnected) {
+                          syncAfterLink(
+                            "/api/plaid/sync",
+                            "Reconnected. Syncing…",
+                            "Reconnected",
+                            "Reconnected. Sync again in a minute."
+                          );
+                          return;
+                        }
+                        refreshAll();
+                        syncAfterLink(
+                          "/api/plaid/sync",
+                          `Linked ${name ?? "your bank"}. Syncing…`,
+                          `Linked ${name ?? "your bank"}`,
+                          `Linked ${name ?? "your bank"}. Sync again in a minute to pull its history.`
+                        );
+                      }}
+                    />
+                  </div>
+                </dialog>
               </>
             ) : (
               <p className="text-sm rounded-2xl border border-ink bg-sun/40 px-4 py-2.5">

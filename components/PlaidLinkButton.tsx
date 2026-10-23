@@ -25,6 +25,8 @@ function readOAuthRedirect(): { token: string | null; reconnecting: boolean; red
 export function PlaidLinkButton({
   itemId,
   historyStart,
+  label = "+ Link a bank",
+  onOpen,
   onLinked,
   variant = "primary",
   size = "md",
@@ -32,6 +34,9 @@ export function PlaidLinkButton({
   itemId?: number;
   /** A new bank's transactions go back to this date (YYYY-MM-DD); ignored with itemId */
   historyStart?: string;
+  label?: string;
+  /** Called just before Plaid opens */
+  onOpen?: () => void;
   /** reconnected: an existing bank signed back in; there is no new bank */
   onLinked: (institutionName: string | null, reconnected: boolean) => void;
   variant?: ButtonVariant;
@@ -135,12 +140,13 @@ export function PlaidLinkButton({
     sessionStorage.setItem(LINK_TOKEN_KEY, linkToken);
     if (itemId != null) sessionStorage.setItem(LINK_ITEM_KEY, String(itemId));
     else sessionStorage.removeItem(LINK_ITEM_KEY);
+    onOpen?.();
     open();
   }
 
   return (
     <Button variant={variant} size={size} onClick={openLink} disabled={!ready || !linkToken || linking}>
-      {linking ? "Linking…" : itemId != null ? "Reconnect" : "+ Link a bank"}
+      {linking ? "Linking…" : itemId != null ? "Reconnect" : label}
     </Button>
   );
 }
