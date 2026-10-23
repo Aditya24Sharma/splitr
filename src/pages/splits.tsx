@@ -406,7 +406,8 @@ export default function SplitsPage() {
 
           {filtersOpen && (
             <div className="rise rounded-3xl border border-ink bg-mist p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              {/* Stacked on phones: Safari won't shrink a date input to half the width */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1.5 text-xs font-semibold">
                   From
                   <Input
