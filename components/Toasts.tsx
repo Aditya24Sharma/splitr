@@ -18,6 +18,8 @@ export function Toasts() {
           error: "!border-danger !bg-danger-dim !text-danger !shadow-[0_4px_0_0_#D9370B]",
           success: "!bg-mint-dim",
           icon: "shrink-0",
+          // Sonner floats the spinner over the corner; keep it in the icon slot
+          loader: "!relative",
         },
       }}
     />
