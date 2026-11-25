@@ -8,7 +8,7 @@ import postgres from 'postgres'
 // the anon/authenticated roles. Its auth.uid() is older than the hosted one and
 // only a superuser can replace it, so that is a one-time step:
 //   docker run -d --name splitr-pg -p 54329:5432 -e POSTGRES_PASSWORD=postgres supabase/postgres:17.11.0.006
-//   docker exec splitr-pg psql -U supabase_admin -d postgres -c "create or replace function auth.uid() returns uuid language sql stable as \$\$ select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''), (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$"
+//   docker exec -i splitr-pg psql -U supabase_admin -d postgres < test/db/auth-uid.sql
 //   DATABASE_URL=postgres://postgres:postgres@localhost:54329/postgres npm run test:db
 //
 // Refuses to run against anything but localhost: it drops the schema.
