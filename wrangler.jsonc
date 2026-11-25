@@ -37,6 +37,11 @@
     // Real banks; PLAID_CLIENT_ID and PLAID_SECRET (the production one) are secrets
     "PLAID_ENV": "production"
   },
+  // Every 6 hours: one small query so Supabase doesn't pause the project for
+  // inactivity (worker/keep-awake.ts)
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
   "observability": {
     "enabled": true
   }

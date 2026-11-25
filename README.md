@@ -80,7 +80,8 @@ means every bank has to be relinked.
   3 MB compressed, each request gets 10 ms of CPU time, and only `/api/*`
   calls count toward the 100,000 Worker requests per day.
 - **Supabase** signs people in (email links, invite only) and holds the
-  Postgres database. The free plan pauses a project after 7 idle days.
+  Postgres database. The free plan pauses a project after 7 idle days, so a
+  Worker cron trigger queries it every 6 hours (`worker/keep-awake.ts`).
 - **Hyperdrive** pools the Worker's connections to Postgres.
 
 ---
