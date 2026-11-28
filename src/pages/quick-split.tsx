@@ -5,6 +5,7 @@ import Link, { useGoTo, useQueryString } from "@/components/Link";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
+import { SplitWithPicker } from "@/components/SplitWithPicker";
 import { TagPicker } from "@/components/TagPicker";
 import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
@@ -265,15 +266,6 @@ export default function NewSimplePage() {
   // Handlers
   // ---------------------------------------------------------------------------
 
-  function toggleParticipant(id: string) {
-    setParticipantIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function setExactAmount(personId: string, value: string) {
     setExactAmounts((prev) => ({ ...prev, [personId]: value }));
   }
@@ -458,21 +450,11 @@ export default function NewSimplePage() {
       </Section>
 
       {/* ── Who's in ────────────────────────────────────────────────────── */}
-      <Section title="Split between">
+      <Section title="Split with">
         {peopleLoading ? (
           <p className="text-sm text-ink-faint">Loading…</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {people.map((p) => (
-              <PersonChip
-                key={p.id}
-                name={p.name}
-                colorHex={p.colorHex}
-                selected={participantIds.has(p.id)}
-                onClick={() => toggleParticipant(p.id)}
-              />
-            ))}
-          </div>
+          <SplitWithPicker people={people} picked={participantIds} onChange={setParticipantIds} />
         )}
 
         <div className="flex gap-1.5 pt-1" role="radiogroup" aria-label="Split method">

@@ -12,6 +12,7 @@ import { BreakdownCard } from "@/components/BreakdownCard";
 import { CopyButton } from "@/components/CopyButton";
 import { TagPicker } from "@/components/TagPicker";
 import { PersonChip } from "@/components/PersonChip";
+import { SplitWithPicker } from "@/components/SplitWithPicker";
 import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
@@ -64,6 +65,11 @@ interface SavedExpense {
   }[];
 }
 
+/** A row nobody has filled in yet, which follows changes to who's in the split */
+function isBlankRow(row: ItemRow): boolean {
+  return row.name.trim() === "" && !(parseFloat(row.lineTotal) > 0);
+}
+
 function savedItemToRow(it: SavedExpense["items"][number]): ItemRow {
   return {
     id: crypto.randomUUID(),
@@ -100,6 +106,8 @@ export default function NewItemizedPage() {
   const [taxDollars, setTaxDollars] = useState("0.00");
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  // Who's in this receipt; only they show under each item
+  const [splitWithIds, setSplitWithIds] = useState<Set<string>>(new Set());
 
   // Payer
   const [payerId, setPayerId] = useState("");
@@ -135,6 +143,9 @@ export default function NewItemizedPage() {
           setPurchasedAt(saved.purchasedAt ? saved.purchasedAt.slice(0, 10) : "");
           setTaxDollars((saved.taxCents / 100).toFixed(2));
           setRows(saved.items.map(savedItemToRow));
+          setSplitWithIds(
+            new Set(saved.items.flatMap((it) => it.assignments.map((a) => a.personId)))
+          );
           setPayerId(saved.payerId);
           return;
         }
@@ -147,7 +158,9 @@ export default function NewItemizedPage() {
         const def = (tx && data.find((p) => p.isMe)) || data.find((p) => p.isDefault) || data[0];
         if (def) setPayerId(def.id);
         // Start with one empty item, shared by the usual people
-        setRows([makeRow(data.filter((p) => p.isDefault || (tx && p.isMe)).map((p) => p.id))]);
+        const usual = data.filter((p) => p.isDefault || (tx && p.isMe)).map((p) => p.id);
+        setSplitWithIds(new Set(usual));
+        setRows([makeRow(usual)]);
       })
       .catch((err) => {
         if (editId || fromTx) {
@@ -157,11 +170,25 @@ export default function NewItemizedPage() {
       .finally(() => setPeopleLoading(false));
   }, [editId, fromTx]);
 
-  // Derived: IDs of default (roommate) people — used as initial assignees.
-  // On your own charge you're in on every item too, unless you untick yourself.
-  const defaultAssigneeIds = people
-    .filter((p) => p.isDefault || (sourceTx && p.isMe))
-    .map((p) => p.id);
+  // Only the people in this receipt are offered under each item, and a new
+  // item starts shared by all of them
+  const splitWithPeople = people.filter((p) => splitWithIds.has(p.id));
+  const defaultAssigneeIds = splitWithPeople.map((p) => p.id);
+
+  /**
+   * Someone taken out of the receipt comes off every item. Someone added
+   * joins only blank items, so items you've already assigned stay as they are.
+   */
+  function handleSplitWithChange(next: Set<string>) {
+    setSplitWithIds(next);
+    setRows((prev) =>
+      prev.map((row) => {
+        const kept = row.assigneeIds.filter((id) => next.has(id));
+        if (!isBlankRow(row)) return { ...row, assigneeIds: kept };
+        return { ...row, assigneeIds: people.filter((p) => next.has(p.id)).map((p) => p.id) };
+      })
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Table handlers
@@ -428,19 +455,27 @@ export default function NewItemizedPage() {
         )}
       </Section>
 
+      <Section title="Split with" hint="Pick a group or people. Only they show under each item.">
+        {peopleLoading ? (
+          <p className="text-sm text-ink-faint">Loading…</p>
+        ) : (
+          <SplitWithPicker people={people} picked={splitWithIds} onChange={handleSplitWithChange} />
+        )}
+      </Section>
+
       <Section title={`Items · ${rows.length}`} hint="Tap people under each item to say who shares it.">
         {selectedRowIds.size > 0 && (
           <BulkAssignBar
             selectedRowIds={selectedRowIds}
             rows={rows}
-            people={people}
+            people={splitWithPeople}
             onBulkToggle={handleBulkToggle}
             onClearSelection={() => setSelectedRowIds(new Set())}
           />
         )}
         <ItemTable
           rows={rows}
-          people={people}
+          people={splitWithPeople}
           selectedRowIds={selectedRowIds}
           taxDollars={taxDollars}
           onTaxChange={setTaxDollars}
