@@ -330,7 +330,7 @@ export default function PeoplePage() {
                         onChange={(e) => setEditMe(e.target.checked)}
                         className="w-5 h-5 accent-[#0B0B0C]"
                       />
-                      This is me (picked as the payer when you split a bank charge)
+                      This is me (you pay for every split)
                     </label>
 
                     {/* Actions */}

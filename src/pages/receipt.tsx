@@ -11,8 +11,8 @@ import { BulkAssignBar } from "@/components/BulkAssignBar";
 import { BreakdownCard } from "@/components/BreakdownCard";
 import { CopyButton } from "@/components/CopyButton";
 import { TagPicker } from "@/components/TagPicker";
-import { PersonChip } from "@/components/PersonChip";
 import { SplitWithPicker } from "@/components/SplitWithPicker";
+import { MarkYourselfFirst } from "@/components/MarkYourselfFirst";
 import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
@@ -154,11 +154,11 @@ export default function NewItemizedPage() {
           setStore(txLabel(tx));
           setPurchasedAt(tx.date);
         }
-        // A charge from Money is yours, so you paid
-        const def = (tx && data.find((p) => p.isMe)) || data.find((p) => p.isDefault) || data[0];
-        if (def) setPayerId(def.id);
-        // Start with one empty item, shared by the usual people
-        const usual = data.filter((p) => p.isDefault || (tx && p.isMe)).map((p) => p.id);
+        // You always pay
+        const me = data.find((p) => p.isMe);
+        if (me) setPayerId(me.id);
+        // Start with one empty item, shared by you and your roommates
+        const usual = data.filter((p) => p.isDefault || p.isMe).map((p) => p.id);
         setSplitWithIds(new Set(usual));
         setRows([makeRow(usual)]);
       })
@@ -394,6 +394,11 @@ export default function NewItemizedPage() {
     );
   }
 
+  // A new receipt needs you as the payer; an edit keeps the payer it was saved with
+  if (!peopleLoading && !editId && !people.some((p) => p.isMe)) {
+    return <MarkYourselfFirst />;
+  }
+
   const itemsTotalCents =
     rows.reduce((sum, r) => sum + toCents(parseFloat(r.lineTotal) || 0), 0) +
     toCents(parseFloat(taxDollars) || 0);
@@ -436,24 +441,6 @@ export default function NewItemizedPage() {
           />
         </Field>
       </div>
-
-      <Section title="Who paid">
-        {peopleLoading ? (
-          <p className="text-sm text-ink-faint">Loading…</p>
-        ) : (
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
-            {people.map((p) => (
-              <PersonChip
-                key={p.id}
-                name={p.name}
-                colorHex={p.colorHex}
-                selected={payerId === p.id}
-                onClick={() => setPayerId(p.id)}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
 
       <Section title="Split with" hint="Pick a group or people. Only they show under each item.">
         {peopleLoading ? (
