@@ -5,6 +5,7 @@ import { peopleQuery, useRefreshAll } from "../queries";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonAvatar } from "@/components/PersonChip";
+import { GroupsSection } from "@/components/GroupsSection";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -482,6 +483,8 @@ export default function PeoplePage() {
           </div>
         </form>
       </div>
+
+      {loadState === "ready" && people.length > 0 && <GroupsSection people={people} />}
     </div>
   );
 }

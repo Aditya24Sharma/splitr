@@ -94,6 +94,22 @@ export const expenseParticipant = sqliteTable(
   (t) => [primaryKey({ columns: [t.expenseId, t.personId] })],
 )
 
+/** A named set of people, e.g. a trip; picking it fills in who's in a split */
+export const personGroup = sqliteTable('PersonGroup', {
+  id: text('id').primaryKey().$defaultFn(newId),
+  name: text('name').notNull(),
+  createdAt: dateTime('createdAt').notNull().$defaultFn(now),
+})
+
+export const personGroupMember = sqliteTable(
+  'PersonGroupMember',
+  {
+    groupId: text('groupId').notNull(),
+    personId: text('personId').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.groupId, t.personId] })],
+)
+
 // ---------------------------------------------------------------------------
 // Money: linked banks and spending
 // ---------------------------------------------------------------------------
@@ -192,6 +208,14 @@ export const itemAssignmentRelations = relations(itemAssignment, ({ one }) => ({
 
 export const expenseParticipantRelations = relations(expenseParticipant, ({ one }) => ({
   expense: one(expense, { fields: [expenseParticipant.expenseId], references: [expense.id] }),
+}))
+
+export const personGroupRelations = relations(personGroup, ({ many }) => ({
+  members: many(personGroupMember),
+}))
+
+export const personGroupMemberRelations = relations(personGroupMember, ({ one }) => ({
+  group: one(personGroup, { fields: [personGroupMember.groupId], references: [personGroup.id] }),
 }))
 
 export const plaidItemRelations = relations(plaidItem, ({ many }) => ({

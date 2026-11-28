@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { accounts } from './routes/accounts'
 import { expenses } from './routes/expenses'
+import { groups } from './routes/groups'
 import { people } from './routes/people'
 import { plaidRoutes } from './routes/plaid'
 import { tags } from './routes/tags'
@@ -14,6 +15,7 @@ export const app = new Hono<AppEnv>().basePath('/api')
 
 app.route('/expenses', expenses)
 app.route('/people', people)
+app.route('/groups', groups)
 app.route('/tags', tags)
 app.route('/transactions', transactions)
 app.route('/accounts', accounts)

@@ -49,6 +49,13 @@ export interface Person {
   archived: boolean;
 }
 
+/** A named set of people; memberIds may include archived people, so filter them out */
+export interface Group {
+  id: string;
+  name: string;
+  memberIds: string[];
+}
+
 export interface TagWithCount {
   id: string;
   name: string;
@@ -62,6 +69,11 @@ export interface TagWithCount {
 export const peopleQuery = queryOptions({
   queryKey: ["people"],
   queryFn: () => getJson<Person[]>("/api/people", "people"),
+});
+
+export const groupsQuery = queryOptions({
+  queryKey: ["groups"],
+  queryFn: () => getJson<Group[]>("/api/groups", "groups"),
 });
 
 export const tagsQuery = queryOptions({
