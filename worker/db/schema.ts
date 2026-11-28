@@ -44,7 +44,7 @@ export const expense = sqliteTable('Expense', {
   subtotalCents: integer('subtotalCents').notNull().default(0),
   taxCents: integer('taxCents').notNull().default(0),
   totalCents: integer('totalCents').notNull(),
-  splitMethod: text('splitMethod', { enum: ['EVEN', 'EXACT', 'ITEMIZED'] }).notNull(),
+  splitMethod: text('splitMethod', { enum: ['EVEN', 'EXACT', 'SHARES', 'ITEMIZED'] }).notNull(),
   loggedToSplitwise: bool('loggedToSplitwise').notNull().default(false),
   imagePath: text('imagePath'),
   createdAt: dateTime('createdAt').notNull().$defaultFn(now),
@@ -89,6 +89,7 @@ export const expenseParticipant = sqliteTable(
     expenseId: text('expenseId').notNull(),
     personId: text('personId').notNull(),
     exactAmountCents: integer('exactAmountCents'),
+    shares: integer('shares'),
   },
   (t) => [primaryKey({ columns: [t.expenseId, t.personId] })],
 )

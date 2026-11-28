@@ -10,7 +10,7 @@ const SPLIT_CHOICES = [
   {
     path: "/expenses/new/simple",
     title: "Quick split",
-    body: "One total, split evenly or by exact amounts. Gas, dinners, tickets.",
+    body: "One total, split evenly, by exact amounts, or by shares. Gas, dinners, tickets.",
     color: "bg-sky",
   },
   {

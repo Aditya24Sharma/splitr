@@ -30,9 +30,9 @@ export type ExpenseInput =
       description: string
       purchasedAt: Date | null
       totalCents: number
-      splitMethod: 'EVEN' | 'EXACT'
+      splitMethod: 'EVEN' | 'EXACT' | 'SHARES'
       tags: string[]
-      participants: { personId: string; exactAmountCents: number | null }[]
+      participants: { personId: string; exactAmountCents: number | null; shares: number | null }[]
     }
 
 /** Validates a request body. Returns the cleaned input, or an error message for a 400. */
@@ -98,7 +98,9 @@ export function parseExpenseInput(body: any): { input: ExpenseInput } | { error:
     if (!payerId || typeof payerId !== 'string') return { error: 'payerId is required' }
     if (!description || typeof description !== 'string') return { error: 'description is required' }
     if (typeof totalCents !== 'number') return { error: 'totalCents is required' }
-    if (splitMethod !== 'EVEN' && splitMethod !== 'EXACT') return { error: 'splitMethod must be EVEN or EXACT' }
+    if (splitMethod !== 'EVEN' && splitMethod !== 'EXACT' && splitMethod !== 'SHARES') {
+      return { error: 'splitMethod must be EVEN, EXACT, or SHARES' }
+    }
     if (!Array.isArray(participants) || participants.length === 0) {
       return { error: 'participants must be a non-empty array' }
     }
@@ -106,6 +108,7 @@ export function parseExpenseInput(body: any): { input: ExpenseInput } | { error:
     const cleanParticipants = participants.map(p => ({
       personId: p.personId,
       exactAmountCents: p.exactAmountCents ?? null,
+      shares: p.shares ?? null,
     }))
     const error = splitError({
       type: 'SIMPLE',

@@ -55,3 +55,13 @@ export function splitSimpleExact(totalCents: Cents, shares: PersonShare[]): Pers
   if (s !== totalCents) throw new Error('exact split must sum to total')
   return shares
 }
+
+/** Splits by whole-number shares: 2 shares pays twice what 1 share pays. */
+export function splitSimpleShares(totalCents: Cents, shares: { personId: string; shares: number }[]): PersonShare[] {
+  if (shares.length === 0) throw new Error('shares split: no participants')
+  if (!shares.every(s => Number.isInteger(s.shares) && s.shares > 0)) {
+    throw new Error('shares split needs a whole number of shares, at least 1, for every participant')
+  }
+  const parts = apportion(totalCents, shares.map(s => s.shares))
+  return shares.map((s, i) => ({ personId: s.personId, cents: parts[i] }))
+}

@@ -72,6 +72,19 @@ describe('computeBreakdown', () => {
     expect(bd.owes[0]).toEqual({ personId: 'personB', cents: 3000 })
   })
 
+  it('simple SHARES: the payer is owed the others\' shares', () => {
+    const bd = computeBreakdown({
+      type: 'SIMPLE', splitMethod: 'SHARES', payerId: 'A', taxCents: 0, totalCents: 9000,
+      items: [],
+      participants: [
+        { personId: 'A', exactAmountCents: null, shares: 1 },
+        { personId: 'B', exactAmountCents: null, shares: 2 },
+      ],
+    })
+    expect(bd.perPerson).toEqual([{ personId: 'A', cents: 3000 }, { personId: 'B', cents: 6000 }])
+    expect(bd.owes).toEqual([{ personId: 'B', cents: 6000 }])
+  })
+
   it('SIMPLE EXACT throws when a participant is missing an amount', () => {
     expect(() => computeBreakdown({
       type: 'SIMPLE', splitMethod: 'EXACT', payerId: 'A', taxCents: 0, totalCents: 5000,

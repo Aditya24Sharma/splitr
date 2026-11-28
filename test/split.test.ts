@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitItemized, splitSimpleEven, splitSimpleExact } from '@/lib/split'
+import { splitItemized, splitSimpleEven, splitSimpleExact, splitSimpleShares } from '@/lib/split'
 import { WALMART, SAMS } from './fixtures/receipts'
 
 const sum = (xs: { cents: number }[]) => xs.reduce((a, b) => a + b.cents, 0)
@@ -73,5 +73,17 @@ describe('splitSimple', () => {
       .toEqual([{personId:'A',cents:2000},{personId:'B',cents:3000}])
     expect(() => splitSimpleExact(5000, [{personId:'A',cents:2000},{personId:'B',cents:2000}]))
       .toThrow()
+  })
+  it('shares split pays in proportion to shares and reconciles to total', () => {
+    // $100 over 2 + 1 shares: 66.67 / 33.33
+    expect(splitSimpleShares(10000, [{ personId: 'A', shares: 2 }, { personId: 'B', shares: 1 }]))
+      .toEqual([{ personId: 'A', cents: 6667 }, { personId: 'B', cents: 3333 }])
+    const r = splitSimpleShares(1001, [{ personId: 'A', shares: 3 }, { personId: 'B', shares: 3 }, { personId: 'C', shares: 1 }])
+    expect(sum(r)).toBe(1001)
+  })
+  it('shares split rejects zero, negative, or fractional shares', () => {
+    expect(() => splitSimpleShares(100, [{ personId: 'A', shares: 0 }])).toThrow()
+    expect(() => splitSimpleShares(100, [{ personId: 'A', shares: -1 }])).toThrow()
+    expect(() => splitSimpleShares(100, [{ personId: 'A', shares: 1.5 }])).toThrow()
   })
 })

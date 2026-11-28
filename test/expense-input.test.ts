@@ -58,6 +58,28 @@ describe('parseExpenseInput', () => {
     expect(parseExpenseInput(body)).toEqual({ error: 'exact split must sum to total' })
   })
 
+  it('accepts a shares split and keeps each share count', () => {
+    const body = {
+      ...simple,
+      splitMethod: 'SHARES',
+      participants: [{ personId: 'A', shares: 2 }, { personId: 'B', shares: 1 }],
+    }
+    const r = parseExpenseInput(body)
+    if ('error' in r) throw new Error(r.error)
+    expect(r.input).toMatchObject({
+      splitMethod: 'SHARES',
+      participants: [
+        { personId: 'A', shares: 2, exactAmountCents: null },
+        { personId: 'B', shares: 1, exactAmountCents: null },
+      ],
+    })
+  })
+
+  it('rejects a shares split with a missing share count', () => {
+    const body = { ...simple, splitMethod: 'SHARES', participants: [{ personId: 'A', shares: 2 }, { personId: 'B' }] }
+    expect(parseExpenseInput(body)).toEqual({ error: expect.stringContaining('whole number of shares') })
+  })
+
   it('saves a date on a simple expense, and rejects a bad one', () => {
     const r = parseExpenseInput({ ...simple, purchasedAt: '2026-10-15' })
     if ('error' in r) throw new Error(r.error)
