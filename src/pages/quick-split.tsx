@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { PersonChip } from "@/components/PersonChip";
 import { SplitWithPicker } from "@/components/SplitWithPicker";
+import { MarkYourselfFirst } from "@/components/MarkYourselfFirst";
 import { TagPicker } from "@/components/TagPicker";
 import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
@@ -127,27 +128,16 @@ export default function NewSimplePage() {
           );
           return;
         }
-        // Pre-check default (roommate) people
-        const defaultIds = new Set(
-          data.filter((p) => p.isDefault).map((p) => p.id)
-        );
+        // You always pay, and start out in on it with your roommates
+        const me = data.find((p) => p.isMe);
+        if (me) setPayerId(me.id);
+        setParticipantIds(new Set(data.filter((p) => p.isDefault || p.isMe).map((p) => p.id)));
         if (tx) {
           setSourceTx(tx);
           setAmountDollars((tx.amount / 100).toFixed(2));
           setDescription(txLabel(tx));
           setPurchasedAt(tx.date);
-          // It's your charge, so you paid and you're in on it
-          const me = data.find((p) => p.isMe);
-          if (me) {
-            setPayerId(me.id);
-            defaultIds.add(me.id);
-          }
-          setParticipantIds(defaultIds);
-          return;
         }
-        const def = data.find((p) => p.isDefault) ?? data[0];
-        if (def) setPayerId(def.id);
-        setParticipantIds(defaultIds.size > 0 ? defaultIds : new Set());
       })
       .catch((err) => {
         if (editId || fromTx) {
@@ -356,6 +346,11 @@ export default function NewSimplePage() {
     );
   }
 
+  // A new split needs you as the payer; an edit keeps the payer it was saved with
+  if (!peopleLoading && !editId && !people.some((p) => p.isMe)) {
+    return <MarkYourselfFirst />;
+  }
+
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
@@ -421,33 +416,6 @@ export default function NewSimplePage() {
           />
         </Field>
       </div>
-
-      {/* ── Who paid ────────────────────────────────────────────────────── */}
-      <Section title="Who paid">
-        {peopleLoading ? (
-          <p className="text-sm text-ink-faint">Loading…</p>
-        ) : (
-          <>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Who paid">
-            {people.map((p) => (
-              <PersonChip
-                key={p.id}
-                name={p.name}
-                colorHex={p.colorHex}
-                selected={payerId === p.id}
-                onClick={() => setPayerId(p.id)}
-              />
-            ))}
-          </div>
-          {sourceTx && !people.some((p) => p.isMe) && (
-            <p className="text-sm text-ink-muted">
-              Pick yourself. To skip this next time, mark yourself as{" "}
-              <Link href="/people" className="tap-area font-semibold underline underline-offset-4">This is me</Link>.
-            </p>
-          )}
-          </>
-        )}
-      </Section>
 
       {/* ── Who's in ────────────────────────────────────────────────────── */}
       <Section title="Split with">
