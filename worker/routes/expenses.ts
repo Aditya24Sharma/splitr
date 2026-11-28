@@ -54,7 +54,12 @@ function childWrites(db: Db, expenseId: string, input: ExpenseInput, tagIds: str
   } else {
     writes.push(
       db.insert(expenseParticipant).values(
-        input.participants.map((p) => ({ expenseId, personId: p.personId, exactAmountCents: p.exactAmountCents })),
+        input.participants.map((p) => ({
+          expenseId,
+          personId: p.personId,
+          exactAmountCents: p.exactAmountCents,
+          shares: p.shares,
+        })),
       ),
     )
   }

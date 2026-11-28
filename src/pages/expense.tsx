@@ -36,7 +36,7 @@ interface Expense {
   payer: Person;
   loggedToSplitwise: boolean;
   createdAt: string;
-  splitMethod: "EVEN" | "EXACT" | "ITEMIZED";
+  splitMethod: "EVEN" | "EXACT" | "SHARES" | "ITEMIZED";
   taxCents: number;
   items: {
     id: string;

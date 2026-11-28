@@ -1,13 +1,13 @@
-import { splitItemized, splitSimpleEven, splitSimpleExact, PersonShare } from '@/lib/split'
+import { splitItemized, splitSimpleEven, splitSimpleExact, splitSimpleShares, PersonShare } from '@/lib/split'
 
 export interface BreakdownExpense {
   type: 'ITEMIZED' | 'SIMPLE'
-  splitMethod: 'EVEN' | 'EXACT' | 'ITEMIZED'
+  splitMethod: 'EVEN' | 'EXACT' | 'SHARES' | 'ITEMIZED'
   payerId: string
   taxCents: number
   totalCents: number
   items: { id: string; lineTotalCents: number; assignments: { personId: string }[] }[]
-  participants: { personId: string; exactAmountCents: number | null }[]
+  participants: { personId: string; exactAmountCents: number | null; shares?: number | null }[]
 }
 
 export interface Breakdown {
@@ -33,6 +33,11 @@ export function computeBreakdown(e: BreakdownExpense): Breakdown {
     perPerson = result.perPerson
   } else if (e.splitMethod === 'EVEN') {
     perPerson = splitSimpleEven(e.totalCents, e.participants.map(p => p.personId))
+  } else if (e.splitMethod === 'SHARES') {
+    perPerson = splitSimpleShares(
+      e.totalCents,
+      e.participants.map(p => ({ personId: p.personId, shares: p.shares ?? 0 })),
+    )
   } else {
     // SIMPLE + EXACT
     perPerson = splitSimpleExact(

@@ -9,7 +9,7 @@ import { TagPicker } from "@/components/TagPicker";
 import { SaveBar } from "@/components/SaveBar";
 import { Section } from "@/components/ui/Section";
 import { toCents, formatUSD } from "@/lib/money";
-import { splitSimpleEven, splitSimpleExact } from "@/lib/split";
+import { splitSimpleEven, splitSimpleExact, splitSimpleShares } from "@/lib/split";
 import { expenseDay } from "@/lib/expense-filter";
 import { txLabel, type TxView } from "@/lib/transactions";
 import { loadExpenseToEdit, loadSourceTx, peopleQuery, queryClient, useRefreshAll } from "../queries";
@@ -27,7 +27,7 @@ interface Person {
   archived: boolean;
 }
 
-type SplitMethod = "EVEN" | "EXACT";
+type SplitMethod = "EVEN" | "EXACT" | "SHARES";
 
 /** The parts of GET /api/expenses/[id] this form needs when editing */
 interface SavedExpense {
@@ -39,7 +39,7 @@ interface SavedExpense {
   payerId: string;
   splitMethod: SplitMethod | "ITEMIZED";
   tags: string[];
-  participants: { personId: string; exactAmountCents: number | null }[];
+  participants: { personId: string; exactAmountCents: number | null; shares: number | null }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +77,8 @@ export default function NewSimplePage() {
 
   // Exact-split per-person inputs: personId → dollar string
   const [exactAmounts, setExactAmounts] = useState<Record<string, string>>({});
+  // Shares-split counts: personId → shares; anyone missing has 1
+  const [shareCounts, setShareCounts] = useState<Record<string, number>>({});
 
   // Save state
   const [saving, setSaving] = useState(false);
@@ -107,7 +109,14 @@ export default function NewSimplePage() {
           setAmountDollars((saved.totalCents / 100).toFixed(2));
           setPayerId(saved.payerId);
           setParticipantIds(new Set(saved.participants.map((p) => p.personId)));
-          setSplitMethod(saved.splitMethod === "EXACT" ? "EXACT" : "EVEN");
+          setSplitMethod(
+            saved.splitMethod === "EXACT" || saved.splitMethod === "SHARES" ? saved.splitMethod : "EVEN"
+          );
+          setShareCounts(
+            Object.fromEntries(
+              saved.participants.filter((p) => p.shares !== null).map((p) => [p.personId, p.shares!])
+            )
+          );
           setExactAmounts(
             Object.fromEntries(
               saved.participants
@@ -186,6 +195,11 @@ export default function NewSimplePage() {
           totalCents,
           participantList.map((p) => p.id)
         );
+      } else if (splitMethod === "SHARES") {
+        return splitSimpleShares(
+          totalCents,
+          participantList.map((p) => ({ personId: p.id, shares: shareCounts[p.id] ?? 1 }))
+        );
       } else {
         if (!exactHasAllAmounts || !exactSumMatchesTotal) return null;
         return splitSimpleExact(
@@ -204,9 +218,16 @@ export default function NewSimplePage() {
     totalCents,
     participantList,
     exactAmounts,
+    shareCounts,
     exactHasAllAmounts,
     exactSumMatchesTotal,
   ]);
+
+  // Each person's live amount, for the share steppers
+  const centsByPerson = useMemo(
+    () => new Map((liveBreakdown ?? []).map((s) => [s.personId, s.cents])),
+    [liveBreakdown]
+  );
 
   // Person lookup map
   const personById = useMemo(
@@ -257,6 +278,10 @@ export default function NewSimplePage() {
     setExactAmounts((prev) => ({ ...prev, [personId]: value }));
   }
 
+  function changeShares(personId: string, by: number) {
+    setShareCounts((prev) => ({ ...prev, [personId]: Math.max(1, (prev[personId] ?? 1) + by) }));
+  }
+
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
@@ -275,6 +300,7 @@ export default function NewSimplePage() {
         ...(splitMethod === "EXACT"
           ? { exactAmountCents: toCents(parseFloat(exactAmounts[p.id])) }
           : {}),
+        ...(splitMethod === "SHARES" ? { shares: shareCounts[p.id] ?? 1 } : {}),
       })),
     };
 
@@ -454,6 +480,7 @@ export default function NewSimplePage() {
             [
               ["EVEN", "Evenly"],
               ["EXACT", "Exact amounts"],
+              ["SHARES", "Shares"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -518,6 +545,51 @@ export default function NewSimplePage() {
                 </span>
               </p>
             )}
+          </div>
+        )}
+
+        {/* Share steppers */}
+        {splitMethod === "SHARES" && participantList.length > 0 && (
+          <div className="rounded-3xl border border-ink p-4 space-y-2.5">
+            {participantList.map((p) => {
+              const count = shareCounts[p.id] ?? 1;
+              const cents = centsByPerson.get(p.id);
+              return (
+                <div key={p.id} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <PersonChip name={p.name} colorHex={p.colorHex} size="sm" readOnly />
+                  </div>
+                  {cents !== undefined && (
+                    <span className="text-sm text-ink-muted tabular-nums">{formatUSD(cents)}</span>
+                  )}
+                  <div className="flex items-center gap-1" role="group" aria-label={`${p.name}'s shares`}>
+                    <button
+                      type="button"
+                      onClick={() => changeShares(p.id, -1)}
+                      disabled={count <= 1}
+                      aria-label={`One less share for ${p.name}`}
+                      className="tap-area w-8 h-8 rounded-full border border-ink font-semibold bg-surface hover:bg-sun disabled:opacity-30 disabled:hover:bg-surface"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center font-semibold tabular-nums" aria-live="polite">
+                      {count}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => changeShares(p.id, 1)}
+                      aria-label={`One more share for ${p.name}`}
+                      className="tap-area w-8 h-8 rounded-full border border-ink font-semibold bg-surface hover:bg-sun"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            <p className="pt-2 border-t border-rim text-sm text-ink-muted">
+              Someone with 2 shares pays twice as much as someone with 1.
+            </p>
           </div>
         )}
       </Section>

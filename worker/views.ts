@@ -35,12 +35,12 @@ export function expenseJson({ tagLinks, ...e }: ExpenseRow) {
 
 type BreakdownSource = {
   type: 'ITEMIZED' | 'SIMPLE'
-  splitMethod: 'EVEN' | 'EXACT' | 'ITEMIZED'
+  splitMethod: 'EVEN' | 'EXACT' | 'SHARES' | 'ITEMIZED'
   payerId: string
   taxCents: number
   totalCents: number
   items: { id: string; lineTotalCents: number; assignments: { personId: string }[] }[]
-  participants: { personId: string; exactAmountCents: number | null }[]
+  participants: { personId: string; exactAmountCents: number | null; shares: number | null }[]
 }
 
 export function breakdownOf(e: BreakdownSource): Breakdown {
@@ -55,7 +55,11 @@ export function breakdownOf(e: BreakdownSource): Breakdown {
       lineTotalCents: i.lineTotalCents,
       assignments: i.assignments.map((a) => ({ personId: a.personId })),
     })),
-    participants: e.participants.map((p) => ({ personId: p.personId, exactAmountCents: p.exactAmountCents })),
+    participants: e.participants.map((p) => ({
+      personId: p.personId,
+      exactAmountCents: p.exactAmountCents,
+      shares: p.shares,
+    })),
   })
 }
 

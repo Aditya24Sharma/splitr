@@ -224,7 +224,7 @@ export default function TransactionPage() {
               {
                 href: `/expenses/new/simple?fromTx=${tx.id}`,
                 title: "Quick split",
-                body: "Evenly or by exact amounts.",
+                body: "Evenly, by exact amounts, or by shares.",
                 color: "bg-sky",
               },
               {
